@@ -1,1 +1,1 @@
-# Restricitive_Sampling
+# Restrictive_Sampling
