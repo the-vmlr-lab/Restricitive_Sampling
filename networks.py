@@ -133,13 +133,15 @@ class ClassifierNetwork(nn.Module):
         
         return out
 if __name__ == '__main__':
-    sampler_model = SamplerNetwork(20,gpu=False)
+    sampler_model = SamplerNetwork(784,gpu=False)
     print(type(sampler_model))
     ip = torch.rand(1, 1, 28, 28, requires_grad=False)
 
     out = sampler_model(ip)
     plt.imshow(ip.squeeze(), cmap="gray")
     plt.show()
-    plt.imshow(out.detach().numpy().squeeze(), cmap="gray")
+    plt.clf()
+    print(out.detach().numpy().squeeze()*255)
+    plt.imshow(out.detach().numpy().squeeze()*255)
     plt.show()
 
