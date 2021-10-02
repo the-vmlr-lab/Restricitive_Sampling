@@ -141,7 +141,7 @@ if __name__ == '__main__':
     plt.imshow(ip.squeeze(), cmap="gray")
     plt.show()
     plt.clf()
-    print(out.detach().numpy().squeeze()*255)
-    plt.imshow(out.detach().numpy().squeeze()*255)
+    print(out.detach().numpy().squeeze())
+    plt.imshow(out.detach().numpy().squeeze())
     plt.show()
 
