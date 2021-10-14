@@ -25,9 +25,32 @@ class TrainSamplerClassifier(object):
         self.epoch=0
         self.classifier_optimizer=classifier_optimizer
         self.batch_size=64
-        self.classifier_start=0
+        self.classifier_start=0.25
         self.test_dataset=test_dataset
-
+    def test_loop_sampler(self):
+        size = len(self.test_dataset)
+       
+        total, correct = 0, 0
+        dataloader = DataLoader(self.test_dataset, batch_size=64)
+        num_batches = len(dataloader)
+        with torch.no_grad():
+            for X, y in dataloader:
+                images, labels = X.to(device), y.to(device)
+            
+                test = Variable(images.view(-1, 1, 28, 28))
+                sampler_X    = Variable(torch.randn(test.size()).to(device))
+                sampler_pred=sampler_X
+                for itr in range(0, self.loop_parameter):
+                    sampler_pred = self.sampler_model(sampler_pred)
+                    filter_out_image=test*sampler_pred
+                    outputs= self.classifier_model(filter_out_image)
+                   
+            
+                predictions = torch.max(outputs, 1)[1].to(device)
+                correct += (predictions == labels).sum()
+                total += len(labels)
+            accuracy = correct * 100 / total
+        print("Test Accuracy: {}%".format(accuracy))
     def test_loop(self):
         size = len(self.test_dataset)
        
@@ -39,9 +62,9 @@ class TrainSamplerClassifier(object):
                 images, labels = X.to(device), y.to(device)
             
                 test = Variable(images.view(-1, 1, 28, 28))
-        
+                
                 outputs = self.classifier_model(test)
-            
+            	
                 predictions = torch.max(outputs, 1)[1].to(device)
                 correct += (predictions == labels).sum()
                 total += len(labels)
@@ -100,6 +123,9 @@ class TrainSamplerClassifier(object):
             self.classifier_model.train()
             self.sampler_model.train()
             self._run_epoch(self.classifier_dataset)
+            self.classifier_model.eval()
+            self.sampler_model.eval()
+            self.test_loop_sampler()
             self.epoch+=1
         #self.eval_epoch
         #self.evaluate_samples
@@ -171,7 +197,7 @@ if __name__ == '__main__':
     classifier_model.to(device)
     learning_rate = 1e-3
     batch_size = 64
-    epochs = 2
+    epochs = 10
     sampler_optimizer    = torch.optim.Adam(sampler_model.parameters(), lr=learning_rate)
     classifier_optimizer = torch.optim.Adam(classifier_model.parameters(), lr=learning_rate)
     classifier_loss_fn = nn.CrossEntropyLoss()
