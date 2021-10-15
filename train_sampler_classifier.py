@@ -11,6 +11,7 @@ import time
 from tqdm import tqdm
 from networks import SamplerNetwork,ClassifierNetwork
 from torch.autograd import Variable
+import argparse
 
 torch.cuda.is_available()
 class TrainSamplerClassifier(object):
@@ -187,7 +188,16 @@ class TrainSamplerClassifier(object):
 
           
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Hyperparam initializer')
+    parser.add_argument('-m', type=float, dest='mask_ratio', default=1.0,
+                        help='mask ratio')
+    parser.add_argument('-lp', dest='loop_param', type=int, default=5,
+                        help='loop parameter')
+
+    args = parser.parse_args()
+
     classifier_data = datasets.FashionMNIST(root="data",train=True,download=True,transform=transforms.Compose([transforms.ToTensor()]))
     test_data = datasets.FashionMNIST(root="data", train=False,download=True,transform=transforms.Compose([transforms.ToTensor()]))
     #classifier_dataloader = DataLoader(training_data, batch_size=64, shuffle=True)
@@ -196,8 +206,8 @@ if __name__ == '__main__':
     learning_rate = 1e-3
     batch_size = 64
     epochs = 10
-    loop_parameter=1
-    mask_per=1
+    mask_per = args.mask_ratio
+    loop_parameter = args.loop_param
     sampler_model=SamplerNetwork(int(mask_per*784))
     print(mask_per)
     classifier_model=ClassifierNetwork()
@@ -208,4 +218,3 @@ if __name__ == '__main__':
     classifier_loss_fn = nn.CrossEntropyLoss()
     trainer=TrainSamplerClassifier(classifier_dataset=classifier_data,sampler_model=sampler_model,classifier_model=classifier_model,classifier_loss_fn=classifier_loss_fn,sampler_optimizer=sampler_optimizer,test_dataset=test_data,classifier_optimizer=classifier_optimizer,loop_parameter=loop_parameter)
     trainer.train(epochs)
-  
