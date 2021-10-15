@@ -14,13 +14,13 @@ from torch.autograd import Variable
 
 torch.cuda.is_available()
 class TrainSamplerClassifier(object):
-    def __init__(self,classifier_dataset,sampler_model,classifier_model,classifier_loss_fn,sampler_optimizer,test_dataset,classifier_optimizer):
+    def __init__(self,classifier_dataset,sampler_model,classifier_model,classifier_loss_fn,sampler_optimizer,test_dataset,classifier_optimizer,loop_parameter):
         self.classifier_dataset=classifier_dataset
         self.sampler_model=sampler_model
         self.classifier_model=classifier_model
         self.classifier_loss_fn=classifier_loss_fn
         self.sampler_optimizer=sampler_optimizer
-        self.loop_parameter=1
+        self.loop_parameter=loop_parameter
         self.test_dataset=test_dataset
         self.epoch=0
         self.classifier_optimizer=classifier_optimizer
@@ -77,6 +77,7 @@ class TrainSamplerClassifier(object):
         print("Test Accuracy: {}%".format(accuracy))
     def train2(self, num_epochs):
         epoch_start_time = time.time()
+      
         while num_epochs is None or self.epoch < num_epochs:
             self.classifier_model.train()
             self._run_epoch2(self.classifier_dataset)
@@ -119,6 +120,7 @@ class TrainSamplerClassifier(object):
                 self.iter_in_epoch += 1
     def train(self, num_epochs):
         epoch_start_time = time.time()
+        print(self.loop_parameter)
         while num_epochs is None or self.epoch < num_epochs:
             self.classifier_model.train()
             self.sampler_model.train()
@@ -127,6 +129,7 @@ class TrainSamplerClassifier(object):
             self.sampler_model.eval()
             self.test_loop_sampler()
             self.epoch+=1
+        
         #self.eval_epoch
         #self.evaluate_samples
     def _run_epoch(self,dataset,eval=False):
@@ -190,17 +193,19 @@ if __name__ == '__main__':
     #classifier_dataloader = DataLoader(training_data, batch_size=64, shuffle=True)
     #eval_dataloader = DataLoader(test_data, batch_size=64, shuffle=True)
    
-
-    sampler_model=SamplerNetwork(784)
-    classifier_model=ClassifierNetwork()
-    sampler_model.to(device)
-    classifier_model.to(device)
     learning_rate = 1e-3
     batch_size = 64
     epochs = 10
+    loop_parameter=1
+    mask_per=1
+    sampler_model=SamplerNetwork(int(mask_per*784))
+    print(mask_per)
+    classifier_model=ClassifierNetwork()
+    sampler_model.to(device)
+    classifier_model.to(device)
     sampler_optimizer    = torch.optim.Adam(sampler_model.parameters(), lr=learning_rate)
     classifier_optimizer = torch.optim.Adam(classifier_model.parameters(), lr=learning_rate)
     classifier_loss_fn = nn.CrossEntropyLoss()
-    trainer=TrainSamplerClassifier(classifier_dataset=classifier_data,sampler_model=sampler_model,classifier_model=classifier_model,classifier_loss_fn=classifier_loss_fn,sampler_optimizer=sampler_optimizer,test_dataset=test_data,classifier_optimizer=classifier_optimizer)
-    trainer.train(2)
+    trainer=TrainSamplerClassifier(classifier_dataset=classifier_data,sampler_model=sampler_model,classifier_model=classifier_model,classifier_loss_fn=classifier_loss_fn,sampler_optimizer=sampler_optimizer,test_dataset=test_data,classifier_optimizer=classifier_optimizer,loop_parameter=loop_parameter)
+    trainer.train(epochs)
   
