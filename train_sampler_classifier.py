@@ -15,7 +15,7 @@ import argparse
 
 torch.cuda.is_available()
 class TrainSamplerClassifier(object):
-    def __init__(self,classifier_dataset,sampler_model,classifier_model,classifier_loss_fn,sampler_optimizer,test_dataset,classifier_optimizer,loop_parameter):
+    def __init__(self,classifier_dataset,sampler_model,classifier_model,classifier_loss_fn,sampler_optimizer,test_dataset,classifier_optimizer,loop_parameter,context):
         self.classifier_dataset=classifier_dataset
         self.sampler_model=sampler_model
         self.classifier_model=classifier_model
@@ -27,6 +27,7 @@ class TrainSamplerClassifier(object):
         self.classifier_optimizer=classifier_optimizer
         self.batch_size=64
         self.classifier_start=0.25
+        self.context=context
         self.test_dataset=test_dataset
     def test_loop_sampler(self):
         size = len(self.test_dataset)
@@ -42,6 +43,8 @@ class TrainSamplerClassifier(object):
                 sampler_X    = Variable(torch.randn(test.size()).to(device))
                 sampler_pred=sampler_X
                 for itr in range(0, self.loop_parameter):
+                    if self.context:
+                        sampler_pred=sampler_pred*test
                     sampler_pred = self.sampler_model(sampler_pred)
                     filter_out_image=test*sampler_pred
                     outputs= self.classifier_model(filter_out_image)
@@ -132,7 +135,7 @@ class TrainSamplerClassifier(object):
             self.epoch+=1
         
         #self.eval_epoch
-        #self.evaluate_samples
+        #self.evaluate_samplesloop_param
     def _run_epoch(self,dataset,eval=False):
         self.iters_per_epoch = int(len(dataset)/self.batch_size)
         self.iter_starttime = time.time()
@@ -162,7 +165,9 @@ class TrainSamplerClassifier(object):
                 sampler_pred=sampler_X
                 loss=0
                 for itr in range(0, self.loop_parameter):
-
+                    if self.context:
+                        sampler_pred=sampler_pred*classifier_X
+                    
                     sampler_pred = self.sampler_model(sampler_pred)
                     filter_out_image=classifier_X*sampler_pred
                     classifier_pred = self.classifier_model(filter_out_image)
@@ -195,9 +200,11 @@ if __name__ == '__main__':
                         help='mask ratio')
     parser.add_argument('-lp', dest='loop_param', type=int, default=5,
                         help='loop parameter')
-
+    parser.add_argument('-context', dest='context', type=int, default=0,
+                        help='loop parameter')
+                
     args = parser.parse_args()
-
+    context=True if args.context==1 else False
     classifier_data = datasets.FashionMNIST(root="data",train=True,download=True,transform=transforms.Compose([transforms.ToTensor()]))
     test_data = datasets.FashionMNIST(root="data", train=False,download=True,transform=transforms.Compose([transforms.ToTensor()]))
     #classifier_dataloader = DataLoader(training_data, batch_size=64, shuffle=True)
@@ -210,11 +217,12 @@ if __name__ == '__main__':
     loop_parameter = args.loop_param
     sampler_model=SamplerNetwork(int(mask_per*784))
     print(mask_per)
+    print(context)
     classifier_model=ClassifierNetwork()
     sampler_model.to(device)
     classifier_model.to(device)
     sampler_optimizer    = torch.optim.Adam(sampler_model.parameters(), lr=learning_rate)
     classifier_optimizer = torch.optim.Adam(classifier_model.parameters(), lr=learning_rate)
     classifier_loss_fn = nn.CrossEntropyLoss()
-    trainer=TrainSamplerClassifier(classifier_dataset=classifier_data,sampler_model=sampler_model,classifier_model=classifier_model,classifier_loss_fn=classifier_loss_fn,sampler_optimizer=sampler_optimizer,test_dataset=test_data,classifier_optimizer=classifier_optimizer,loop_parameter=loop_parameter)
+    trainer=TrainSamplerClassifier(classifier_dataset=classifier_data,sampler_model=sampler_model,classifier_model=classifier_model,classifier_loss_fn=classifier_loss_fn,sampler_optimizer=sampler_optimizer,test_dataset=test_data,classifier_optimizer=classifier_optimizer,loop_parameter=loop_parameter,context=context)
     trainer.train(epochs)
