@@ -133,7 +133,7 @@ class ClassifierNetwork(nn.Module):
         
         return out
 if __name__ == '__main__':
-    sampler_model = SamplerNetwork(784,gpu=False)
+    sampler_model = SamplerNetwork(int(0.5*784),gpu=False)
     print(type(sampler_model))
     ip = torch.rand(1, 1, 28, 28, requires_grad=False)
 
