@@ -188,6 +188,7 @@ class TrainSamplerClassifier(object):
                 self.iter_in_epoch += 1
         writer.add_scalar("Training loss: epoch:",epoch_loss, self.epoch)
 
+writer = SummaryWriter()
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 if __name__ == '__main__':
