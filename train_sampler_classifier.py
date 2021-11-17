@@ -13,6 +13,8 @@ from networks import SamplerNetwork,ClassifierNetwork
 from torch.autograd import Variable
 import argparse
 import os
+from torch.utils.tensorboard import SummaryWriter
+
 torch.cuda.is_available()
 labels_map = {
     0: "T-Shirt",
@@ -184,9 +186,8 @@ class TrainSamplerClassifier(object):
                 tepoch.set_postfix(loss=loss.data, accuracy=100. * accuracy)
                 sleep(0.1)
                 self.iter_in_epoch += 1
-            
+        writer.add_scalar("Training loss: epoch:",epoch_loss, self.epoch)
 
-          
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 if __name__ == '__main__':
