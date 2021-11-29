@@ -137,6 +137,7 @@ class TrainSamplerClassifier(object):
         self.iters_per_epoch = int(len(dataset)/self.batch_size)
         self.iter_starttime = time.time()
         self.iter_in_epoch = 0
+        self.epoch_loss = 0
         if eval:
             dataloader = td.DataLoader(dataset, batch_size=self.batch_size)
         else:
@@ -186,6 +187,7 @@ class TrainSamplerClassifier(object):
                 tepoch.set_postfix(loss=loss.data, accuracy=100. * accuracy)
                 sleep(0.1)
                 self.iter_in_epoch += 1
+        self.epoch_loss = loss.data
         writer.add_scalar("Training loss: epoch:",epoch_loss, self.epoch)
 
 writer = SummaryWriter()
