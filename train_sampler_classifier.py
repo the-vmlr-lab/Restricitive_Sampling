@@ -210,6 +210,7 @@ if __name__ == '__main__':
     if not os.path.exists(save_path):
 
         os.mkdir(save_path)
+    writer = SummaryWriter(save_path)
     context=True if args.context==1 else False
     classifier_data = datasets.FashionMNIST(root="data",train=True,download=True,transform=transforms.Compose([transforms.ToTensor()]))
     test_data = datasets.FashionMNIST(root="data", train=False,download=True,transform=transforms.Compose([transforms.ToTensor()]))
