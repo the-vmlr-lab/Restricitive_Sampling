@@ -231,7 +231,8 @@ if __name__ == '__main__':
     print(context)
     classifier_model=ClassifierNetwork()
     if pre_clr == True:
-        classifier_model.load_state_dict(torch.load('models/Epoch_9.pth'))
+        cp = torch.load('models/Epoch_9.pth')
+        classifier_model.load_state_dict(cp['model_state_dict']))
         classifier_start = 1
     sampler_model.to(device)
     classifier_model.to(device)
