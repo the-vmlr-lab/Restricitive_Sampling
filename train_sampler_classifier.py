@@ -205,13 +205,16 @@ if __name__ == '__main__':
                         help='path to folder where to save objects')
     parser.add_argument('-model_name', dest='model_name', type=str, default='baseline',
                         help='name of model')
+    parser.add_argument('-pretrained_classifier', dest='pre_clr', type=int, default=0,
+                        help='pretrained_classifier')
     args = parser.parse_args()
     save_path=os.path.join(args.save_path,args.model_name)
     if not os.path.exists(save_path):
 
         os.mkdir(save_path)
-    writer = SummaryWriter(save_path)
-    context=True if args.context==1 else False
+    writer  = SummaryWriter(save_path)
+    context = True if args.context==1 else False
+    pre_clr = True if args.context==1 else False
     classifier_data = datasets.FashionMNIST(root="data",train=True,download=True,transform=transforms.Compose([transforms.ToTensor()]))
     test_data = datasets.FashionMNIST(root="data", train=False,download=True,transform=transforms.Compose([transforms.ToTensor()]))
     #classifier_dataloader = DataLoader(training_data, batch_size=64, shuffle=True)
@@ -226,6 +229,8 @@ if __name__ == '__main__':
     print(mask_per)
     print(context)
     classifier_model=ClassifierNetwork()
+    if pre_clr == True:
+        classifier_model.load_state_dict(torch.load('models/Epoch_9.pth'))
     sampler_model.to(device)
     classifier_model.to(device)
     sampler_optimizer    = torch.optim.Adam(sampler_model.parameters(), lr=learning_rate)
