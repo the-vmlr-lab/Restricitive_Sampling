@@ -30,7 +30,7 @@ labels_map = {
 }
 
 class TrainSamplerClassifier(object):
-    def __init__(self,classifier_dataset,sampler_model,classifier_model,classifier_loss_fn,sampler_optimizer,test_dataset,classifier_optimizer,loop_parameter,context,save_path):
+    def __init__(self,classifier_dataset,sampler_model,classifier_model,classifier_loss_fn,sampler_optimizer,test_dataset,classifier_optimizer,loop_parameter,context,save_path,classifier_start):
         self.classifier_dataset=classifier_dataset
         self.sampler_model=sampler_model
         self.classifier_model=classifier_model
@@ -41,7 +41,7 @@ class TrainSamplerClassifier(object):
         self.epoch=0
         self.classifier_optimizer=classifier_optimizer
         self.batch_size=64
-        self.classifier_start=0.25
+        self.classifier_start=classifier_start
         self.context=context
         self.save_path=save_path
         self.test_dataset=test_dataset
@@ -225,19 +225,21 @@ if __name__ == '__main__':
     epochs = 10
     mask_per = args.mask_ratio
     loop_parameter = args.loop_param
+    classifier_start = 0.25
     sampler_model=SamplerNetwork(int(mask_per*784))
     print(mask_per)
     print(context)
     classifier_model=ClassifierNetwork()
     if pre_clr == True:
         classifier_model.load_state_dict(torch.load('models/Epoch_9.pth'))
+        classifier_start = 1
     sampler_model.to(device)
     classifier_model.to(device)
     sampler_optimizer    = torch.optim.Adam(sampler_model.parameters(), lr=learning_rate)
     classifier_optimizer = torch.optim.Adam(classifier_model.parameters(), lr=learning_rate)
     classifier_loss_fn = nn.CrossEntropyLoss()
     
-    trainer=TrainSamplerClassifier(classifier_dataset=classifier_data,sampler_model=sampler_model,classifier_model=classifier_model,classifier_loss_fn=classifier_loss_fn,sampler_optimizer=sampler_optimizer,test_dataset=test_data,classifier_optimizer=classifier_optimizer,loop_parameter=loop_parameter,context=context,save_path=save_path)
+    trainer=TrainSamplerClassifier(classifier_dataset=classifier_data,sampler_model=sampler_model,classifier_model=classifier_model,classifier_loss_fn=classifier_loss_fn,sampler_optimizer=sampler_optimizer,test_dataset=test_data,classifier_optimizer=classifier_optimizer,loop_parameter=loop_parameter,context=context,save_path=save_path, classifier_start=classifier_start)
     
     trainer.visualize_and_save('before_training'+'.png',trainer.test_dataset)
     trainer.train(epochs)
