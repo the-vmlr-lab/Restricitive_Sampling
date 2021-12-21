@@ -32,7 +32,7 @@ class SamplerNetwork(nn.Module):
         super(SamplerNetwork, self).__init__()
         self.conv_1 = nn.Sequential(
             nn.Conv2d(
-                in_channels=1,
+                in_channels=3,
                 out_channels=32,
                 kernel_size=3,
                 padding=1),
@@ -69,7 +69,7 @@ class SamplerNetwork(nn.Module):
         self.deconv_2 = nn.Sequential(
             nn.ConvTranspose2d(
                 in_channels=32,
-                out_channels=1,
+                out_channels=3,
                 kernel_size = 3,
                 stride=2,
                 padding=1, 
@@ -133,15 +133,15 @@ class ClassifierNetwork(nn.Module):
         
         return out
 if __name__ == '__main__':
-    sampler_model = SamplerNetwork(int(0.5*784),gpu=False)
+    sampler_model = SamplerNetwork(int(0.5*3*1024),gpu=False)
     print(type(sampler_model))
-    ip = torch.rand(1, 1, 28, 28, requires_grad=False)
+    ip = torch.rand(1, 3, 32, 32, requires_grad=False)
 
     out = sampler_model(ip)
-    plt.imshow(ip.squeeze(), cmap="gray")
+    plt.imshow(ip.squeeze().permute(1, 2, 0), cmap="BrBG")
     plt.show()
     plt.clf()
     print(out.detach().numpy().squeeze())
-    plt.imshow(out.detach().numpy().squeeze())
+    plt.imshow(out.detach().squeeze().permute(1, 2, 0))
     plt.show()
 

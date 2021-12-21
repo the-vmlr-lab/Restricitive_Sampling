@@ -9,6 +9,7 @@ import torch.utils.data as td
 from time import sleep
 import time
 from tqdm import tqdm
+from models.DLA import DLA
 from networks import SamplerNetwork,ClassifierNetwork
 from torch.autograd import Variable
 import argparse
@@ -63,10 +64,10 @@ class TrainSamplerClassifier(object):
             for X, y in dataloader:
                 figure.add_subplot(rows,cols, sample_no*cols+1)
                 plt.axis("off")
-                plt.imshow(X.squeeze(), cmap="gray")
+                plt.imshow(X.squeeze().permute(1, 2, 0), cmap="BrBG")
                 images, labels = X.to(device), y.to(device)
             
-                test = Variable(images.view(-1, 1, 28, 28))
+                test = Variable(images.view(-1, 3, 32, 32))
                 sampler_X    = Variable(torch.randn(test.size()).to(device))
                 sampler_pred=sampler_X
                 for itr in range(0, self.loop_parameter):
@@ -81,7 +82,7 @@ class TrainSamplerClassifier(object):
                     figure.add_subplot(rows,cols, sample_no*cols+itr+2)
                     plt.title(str(labels_map[int(predictions.detach().cpu().numpy().squeeze())]))
                     plt.axis("off")
-                    plt.imshow(sampler_pred.detach().cpu().numpy().squeeze())
+                    plt.imshow(sampler_pred.detach().cpu().squeeze().permute(1, 2, 0))
                
                 sample_no+=1
                 if sample_no>no_samples-1:
@@ -100,7 +101,7 @@ class TrainSamplerClassifier(object):
             for X, y in dataloader:
                 images, labels = X.to(device), y.to(device)
             
-                test = Variable(images.view(-1, 1, 28, 28))
+                test = Variable(images.view(-1, 3, 32, 32))
                 sampler_X    = Variable(torch.randn(test.size()).to(device))
                 sampler_pred=sampler_X
                 for itr in range(0, self.loop_parameter):
@@ -210,13 +211,12 @@ if __name__ == '__main__':
     args = parser.parse_args()
     save_path=os.path.join(args.save_path,args.model_name)
     if not os.path.exists(save_path):
-
         os.mkdir(save_path)
     writer  = SummaryWriter(save_path)
-    context = True if args.context==1 else False
+    context = True 
     pre_clr = True if args.context==1 else False
-    classifier_data = datasets.FashionMNIST(root="data",train=True,download=True,transform=transforms.Compose([transforms.ToTensor()]))
-    test_data = datasets.FashionMNIST(root="data", train=False,download=True,transform=transforms.Compose([transforms.ToTensor()]))
+    classifier_data = datasets.CIFAR10(root="data",train=True,download=True,transform=transforms.Compose([transforms.ToTensor()]))
+    test_data = datasets.CIFAR10(root="data", train=False,download=True,transform=transforms.Compose([transforms.ToTensor()]))
     #classifier_dataloader = DataLoader(training_data, batch_size=64, shuffle=True)
     #eval_dataloader = DataLoader(test_data, batch_size=64, shuffle=True)
    
@@ -226,13 +226,13 @@ if __name__ == '__main__':
     mask_per = args.mask_ratio
     loop_parameter = args.loop_param
     classifier_start = 0.25
-    sampler_model=SamplerNetwork(int(mask_per*784))
+    sampler_model=SamplerNetwork(int(mask_per*1024*3))
     print(mask_per)
     print(context)
-    classifier_model=ClassifierNetwork()
+    classifier_model=DLA()
     if pre_clr == True:
         cp = torch.load('models/Epoch_9.pth')
-        classifier_model.load_state_dict(cp['model_state_dict']))
+        classifier_model.load_state_dict(cp['model_state_dict'])
         classifier_start = 1
     sampler_model.to(device)
     classifier_model.to(device)
