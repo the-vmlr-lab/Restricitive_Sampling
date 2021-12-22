@@ -9,21 +9,21 @@ from torch import nn
 
 class FilterOutMask(nn.Module):
     """Implemeted using conv layers"""
-    def __init__(self, k,gpu):
+    def __init__(self, k, gpu):
 
         super(FilterOutMask, self).__init__()
-        self.k=k
-        self.gpu=gpu
+        self.k = k
+        self.gpu = gpu
 
 
     def forward(self, output_a):
-        output_flat=torch.flatten(output_a,start_dim=1)
-        top_k,top_k_indices=torch.topk(output_flat,self.k,1)
-        mask=torch.zeros(output_flat.shape)
-        src=torch.ones(top_k_indices.shape)
+        output_flat = torch.flatten(output_a,start_dim=1)
+        top_k, top_k_indices = torch.topk(output_flat,self.k,1)
+        mask = torch.zeros(output_flat.shape)
+        src  = torch.ones(top_k_indices.shape)
         if self.gpu:
-            mask=mask.cuda()
-            src=src.cuda()
+            mask = mask.cuda()
+            src  = src.cuda()
         mask = mask.scatter(1, top_k_indices, src)
         return mask
 
@@ -79,10 +79,10 @@ class SamplerNetwork(nn.Module):
 
         self.drop = nn.Dropout2d(0.25)
         print(gpu)
-        self.filter=FilterOutMask(k,gpu)
+        self.filter = FilterOutMask(k, gpu)
 
     def forward(self, x):
-        input_shape=x.shape
+        input_shape = x.shape
         out = self.conv_1(x) 
         out = self.conv_2(out)
         out = self.deconv_1(out)

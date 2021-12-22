@@ -53,11 +53,11 @@ class TrainSamplerClassifier(object):
 
     def visualize_and_save(self,filename,dataset,no_samples=5):
 
-        dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
+        dataloader  = DataLoader(dataset, batch_size=1, shuffle=True)
         num_batches = len(dataloader)
-        sample_no=0
-        figure = plt.figure(figsize=(8, 8))
-        rows,cols = no_samples, self.loop_parameter+1
+        sample_no   = 0
+        figure      = plt.figure(figsize=(8, 8))
+        rows,cols   = no_samples, self.loop_parameter+1
         
    
         with torch.no_grad():
@@ -75,8 +75,8 @@ class TrainSamplerClassifier(object):
                         sampler_pred=sampler_pred*test
                     sampler_pred = self.sampler_model(sampler_pred)
                     
-                    filter_out_image=test*sampler_pred
-                    outputs= self.classifier_model(filter_out_image)
+                    filter_out_image = test*sampler_pred
+                    outputs = self.classifier_model(filter_out_image)
                     predictions = torch.max(outputs, 1)[1].to(device)
                     
                     figure.add_subplot(rows,cols, sample_no*cols+itr+2)
@@ -84,8 +84,8 @@ class TrainSamplerClassifier(object):
                     plt.axis("off")
                     plt.imshow(sampler_pred.detach().cpu().squeeze().permute(1, 2, 0))
                
-                sample_no+=1
-                if sample_no>no_samples-1:
+                sample_no += 1
+                if sample_no > no_samples-1:
                     break
         plt.savefig(os.path.join(self.save_path,filename)) 
 
@@ -101,15 +101,15 @@ class TrainSamplerClassifier(object):
             for X, y in dataloader:
                 images, labels = X.to(device), y.to(device)
             
-                test = Variable(images.view(-1, 3, 32, 32))
-                sampler_X    = Variable(torch.randn(test.size()).to(device))
-                sampler_pred=sampler_X
+                test      = Variable(images.view(-1, 3, 32, 32))
+                sampler_X = Variable(torch.randn(test.size()).to(device))
+                sampler_pred = sampler_X
                 for itr in range(0, self.loop_parameter):
                     if self.context:
                         sampler_pred=sampler_pred*test
                     sampler_pred = self.sampler_model(sampler_pred)
-                    filter_out_image=test*sampler_pred
-                    outputs= self.classifier_model(filter_out_image)
+                    filter_out_image = test*sampler_pred
+                    outputs = self.classifier_model(filter_out_image)
                    
             
                 predictions = torch.max(outputs, 1)[1].to(device)
@@ -130,7 +130,7 @@ class TrainSamplerClassifier(object):
             self.sampler_model.eval()
             self.test_loop_sampler()
             self.visualize_and_save('test_epoch_'+str(self.epoch)+'.png',self.test_dataset)
-            self.epoch+=1
+            self.epoch += 1
         self.save_sampler_and_classifier()
         #self.eval_epoch
         #self.evaluate_samplesloop_param
@@ -147,34 +147,34 @@ class TrainSamplerClassifier(object):
         with tqdm(dataloader, unit="batch") as tepoch:
             tepoch.set_description(f"Sampler Epoch {self.epoch}")
             for classifier_data in tepoch:
-                classifier_train=False
-                sampler_train=False
-                if self.iter_in_epoch==int(self.classifier_start*self.iters_per_epoch):
+                classifier_train = False
+                sampler_train = False
+                if self.iter_in_epoch == int(self.classifier_start*self.iters_per_epoch):
                     tepoch.set_description(f"Classifier Epoch {self.epoch}")
-                    classifier_train=True
-                elif self.iter_in_epoch>int(self.classifier_start*self.iters_per_epoch):
-                    classifier_train=True
+                    classifier_train = True
+                elif self.iter_in_epoch > int(self.classifier_start*self.iters_per_epoch):
+                    classifier_train = True
 
                 else:
-                    sampler_train=True
+                    sampler_train = True
                 data_X, data_y = classifier_data[0].to(device), classifier_data[1].to(device)
-                classifier_X = Variable(data_X.view(-1,1, 28, 28))
-                classifier_y= Variable(data_y)
-                sampler_X    = Variable(torch.randn(classifier_X.size()).to(device))
-                sampler_pred=sampler_X
-                loss=0
+                classifier_X   = Variable(data_X.view(-1, 3, 32, 32))
+                classifier_y   = Variable(data_y)
+                sampler_X      = Variable(torch.randn(classifier_X.size()).to(device))
+                sampler_pred   = sampler_X
+                loss = 0
                 for itr in range(0, self.loop_parameter):
                     if self.context:
-                        sampler_pred=sampler_pred*classifier_X
+                        sampler_pred = sampler_pred*classifier_X
                     
                     sampler_pred = self.sampler_model(sampler_pred)
-                    filter_out_image=classifier_X*sampler_pred
+                    filter_out_image = classifier_X*sampler_pred
                     classifier_pred = self.classifier_model(filter_out_image)
                     loss += self.classifier_loss_fn(classifier_pred, classifier_y)
 
                 predictions = torch.max(classifier_pred, 1)[1].to(device)
-                correct = (predictions == classifier_y).sum()
-                accuracy = correct / classifier_X.size()[0]
+                correct     = (predictions == classifier_y).sum()
+                accuracy    = correct / classifier_X.size()[0]
                 
                 if sampler_train:
                     self.sampler_optimizer.zero_grad()
@@ -185,7 +185,7 @@ class TrainSamplerClassifier(object):
                     loss.backward()
                     self.classifier_optimizer.step()
 
-                tepoch.set_postfix(loss=loss.data, accuracy=100. * accuracy)
+                tepoch.set_postfix(loss = loss.data, accuracy=100. * accuracy)
                 sleep(0.1)
                 self.iter_in_epoch += 1
         self.epoch_loss = loss.data
@@ -197,17 +197,17 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Hyperparam initializer')
     parser.add_argument('-m', type=float, dest='mask_ratio', default=1.0,
-                        help='mask ratio')
+                        help = 'mask ratio')
     parser.add_argument('-lp', dest='loop_param', type=int, default=5,
-                        help='loop parameter')
+                        help = 'loop parameter')
     parser.add_argument('-context', dest='context', type=int, default=0,
-                        help='context')
+                        help = 'context')
     parser.add_argument('-save_folder', dest='save_path', type=str, default='',
-                        help='path to folder where to save objects')
+                        help = 'path to folder where to save objects')
     parser.add_argument('-model_name', dest='model_name', type=str, default='baseline',
-                        help='name of model')
+                        help = 'name of model')
     parser.add_argument('-pretrained_classifier', dest='pre_clr', type=int, default=0,
-                        help='pretrained_classifier')
+                        help = 'pretrained_classifier')
     args = parser.parse_args()
     save_path=os.path.join(args.save_path,args.model_name)
     if not os.path.exists(save_path):
@@ -226,10 +226,10 @@ if __name__ == '__main__':
     mask_per = args.mask_ratio
     loop_parameter = args.loop_param
     classifier_start = 0.25
-    sampler_model=SamplerNetwork(int(mask_per*1024*3))
+    sampler_model = SamplerNetwork(int(mask_per*1024*3))
     print(mask_per)
     print(context)
-    classifier_model=DLA()
+    classifier_model = DLA()
     if pre_clr == True:
         cp = torch.load('models/Epoch_9.pth')
         classifier_model.load_state_dict(cp['model_state_dict'])
@@ -238,9 +238,9 @@ if __name__ == '__main__':
     classifier_model.to(device)
     sampler_optimizer    = torch.optim.Adam(sampler_model.parameters(), lr=learning_rate)
     classifier_optimizer = torch.optim.Adam(classifier_model.parameters(), lr=learning_rate)
-    classifier_loss_fn = nn.CrossEntropyLoss()
+    classifier_loss_fn   = nn.CrossEntropyLoss()
     
-    trainer=TrainSamplerClassifier(classifier_dataset=classifier_data,sampler_model=sampler_model,classifier_model=classifier_model,classifier_loss_fn=classifier_loss_fn,sampler_optimizer=sampler_optimizer,test_dataset=test_data,classifier_optimizer=classifier_optimizer,loop_parameter=loop_parameter,context=context,save_path=save_path, classifier_start=classifier_start)
+    trainer = TrainSamplerClassifier(classifier_dataset=classifier_data,sampler_model=sampler_model,classifier_model=classifier_model,classifier_loss_fn=classifier_loss_fn,sampler_optimizer=sampler_optimizer,test_dataset=test_data,classifier_optimizer=classifier_optimizer,loop_parameter=loop_parameter,context=context,save_path=save_path, classifier_start=classifier_start)
     
     trainer.visualize_and_save('before_training'+'.png',trainer.test_dataset)
     trainer.train(epochs)
