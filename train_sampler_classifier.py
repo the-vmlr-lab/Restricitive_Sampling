@@ -3,6 +3,7 @@ from torch.utils.data import Dataset
 from torchvision import datasets
 from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import matplotlib.pyplot as plt
 from torch import nn
 import torch.utils.data as td
@@ -31,7 +32,7 @@ labels_map = {
 }
 
 class TrainSamplerClassifier(object):
-    def __init__(self,classifier_dataset,sampler_model,classifier_model,classifier_loss_fn,sampler_optimizer,test_dataset,classifier_optimizer,loop_parameter,context,save_path,classifier_start):
+    def __init__(self,classifier_dataset,sampler_model,classifier_model,classifier_loss_fn,sampler_optimizer,test_dataset,classifier_optimizer, classifier_scheduler, loop_parameter,context,save_path,classifier_start):
         self.classifier_dataset=classifier_dataset
         self.sampler_model=sampler_model
         self.classifier_model=classifier_model
@@ -41,6 +42,7 @@ class TrainSamplerClassifier(object):
         self.test_dataset=test_dataset
         self.epoch=0
         self.classifier_optimizer=classifier_optimizer
+        self.classifier_scheduler=classifier_scheduler
         self.batch_size=64
         self.classifier_start=classifier_start
         self.context=context
@@ -69,10 +71,10 @@ class TrainSamplerClassifier(object):
             
                 test = Variable(images.view(-1, 3, 32, 32))
                 sampler_X    = Variable(torch.randn(test.size()).to(device))
-                sampler_pred=sampler_X
+                sampler_pred = sampler_X
                 for itr in range(0, self.loop_parameter):
                     if self.context:
-                        sampler_pred=sampler_pred*test
+                        sampler_pred = sampler_pred*test
                     sampler_pred = self.sampler_model(sampler_pred)
                     
                     filter_out_image = test*sampler_pred
@@ -96,7 +98,7 @@ class TrainSamplerClassifier(object):
        
         total, correct = 0, 0
         dataloader = DataLoader(self.test_dataset, batch_size=64)
-        num_batches = len(dataloader)
+
         with torch.no_grad():
             for X, y in dataloader:
                 images, labels = X.to(device), y.to(device)
@@ -106,7 +108,7 @@ class TrainSamplerClassifier(object):
                 sampler_pred = sampler_X
                 for itr in range(0, self.loop_parameter):
                     if self.context:
-                        sampler_pred=sampler_pred*test
+                        sampler_pred = sampler_pred*test
                     sampler_pred = self.sampler_model(sampler_pred)
                     filter_out_image = test*sampler_pred
                     outputs = self.classifier_model(filter_out_image)
@@ -115,8 +117,12 @@ class TrainSamplerClassifier(object):
                 predictions = torch.max(outputs, 1)[1].to(device)
                 correct += (predictions == labels).sum()
                 total += len(labels)
-            accuracy = correct * 100 / total
-        print("Test Accuracy: {}%".format(accuracy))
+            validation_accuracy = correct * 100 / total
+
+        curr_lr = classifier_optimizer.param_groups[0]['lr']
+        print("Test Accuracy: {}% Current LR: {}".format(validation_accuracy, curr_lr))
+
+        classifier_scheduler.step(validation_accuracy)
 
     def train(self, num_epochs):
         epoch_start_time = time.time()
@@ -238,9 +244,10 @@ if __name__ == '__main__':
     classifier_model.to(device)
     sampler_optimizer    = torch.optim.Adam(sampler_model.parameters(), lr=learning_rate)
     classifier_optimizer = torch.optim.Adam(classifier_model.parameters(), lr=learning_rate)
+    classifier_scheduler = ReduceLROnPlateau(classifier_optimizer, 'max', patience = 5, factor=0.1)
     classifier_loss_fn   = nn.CrossEntropyLoss()
     
-    trainer = TrainSamplerClassifier(classifier_dataset=classifier_data,sampler_model=sampler_model,classifier_model=classifier_model,classifier_loss_fn=classifier_loss_fn,sampler_optimizer=sampler_optimizer,test_dataset=test_data,classifier_optimizer=classifier_optimizer,loop_parameter=loop_parameter,context=context,save_path=save_path, classifier_start=classifier_start)
+    trainer = TrainSamplerClassifier(classifier_dataset=classifier_data, sampler_model=sampler_model, classifier_model=classifier_model, classifier_loss_fn=classifier_loss_fn, sampler_optimizer=sampler_optimizer, test_dataset=test_data, classifier_optimizer=classifier_optimizer, classifier_scheduler=classifier_scheduler, loop_parameter=loop_parameter, context=context, save_path=save_path, classifier_start=classifier_start)
     
     trainer.visualize_and_save('before_training'+'.png',trainer.test_dataset)
     trainer.train(epochs)
