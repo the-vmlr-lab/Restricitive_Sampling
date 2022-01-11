@@ -16,6 +16,7 @@ from torch.autograd import Variable
 import argparse
 import os
 from torch.utils.tensorboard import SummaryWriter
+import wandb
 
 torch.cuda.is_available()
 labels_map = {
@@ -121,12 +122,15 @@ class TrainSamplerClassifier(object):
 
         curr_lr = classifier_optimizer.param_groups[0]['lr']
         print("Test Accuracy: {}% Current LR: {}".format(validation_accuracy, curr_lr))
-
+        wandb.log({"Test accuracy": validation_accuracy, "Learning Rate": curr_lr})
         classifier_scheduler.step(validation_accuracy)
 
     def train(self, num_epochs):
         epoch_start_time = time.time()
         print(self.loop_parameter)
+        wandb.init("Sampler_classifier")
+        wandb.watch(self.classifier_model, log="all")
+        wandb.watch(self.sampler_model, log="all")
         while num_epochs is None or self.epoch < num_epochs:
             self.classifier_model.train()
             self.sampler_model.train()
@@ -138,6 +142,7 @@ class TrainSamplerClassifier(object):
             self.visualize_and_save('test_epoch_'+str(self.epoch)+'.png',self.test_dataset)
             self.epoch += 1
         self.save_sampler_and_classifier()
+        wandb.finish()
         #self.eval_epoch
         #self.evaluate_samplesloop_param
     def _run_epoch(self,dataset,eval=False):
@@ -196,6 +201,7 @@ class TrainSamplerClassifier(object):
                 self.iter_in_epoch += 1
         self.epoch_loss = loss.data
         writer.add_scalar("Training loss: epoch:", self.epoch_loss, self.epoch)
+        wandb.log({"Train Loss": self.epoch_loss , "Epoch": self.epoch})
 
 writer = SummaryWriter()
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
