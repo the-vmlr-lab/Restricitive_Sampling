@@ -11,6 +11,7 @@ from time import sleep
 import time
 from tqdm import tqdm
 from models.DLA import DLA
+from models.resnet import ResNet101
 from networks import SamplerNetwork,ClassifierNetwork
 from torch.autograd import Variable
 import argparse
@@ -241,7 +242,7 @@ if __name__ == '__main__':
     sampler_model = SamplerNetwork(int(mask_per*1024*3))
     print(mask_per)
     print(context)
-    classifier_model = DLA()
+    classifier_model = ResNet101()
     if pre_clr == True:
         cp = torch.load('models/Epoch_9.pth')
         classifier_model.load_state_dict(cp['model_state_dict'])
