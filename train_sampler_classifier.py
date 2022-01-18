@@ -1,3 +1,4 @@
+
 import torch
 from torch.utils.data import Dataset
 from torchvision import datasets
@@ -14,7 +15,7 @@ from torch.autograd import Variable
 import argparse
 import os
 from torch.utils.tensorboard import SummaryWriter
-
+from generaterandommask import RandomMaskDataset
 torch.cuda.is_available()
 labels_map = {
     0: "T-Shirt",
@@ -60,14 +61,14 @@ class TrainSamplerClassifier(object):
         
    
         with torch.no_grad():
-            for X, y in dataloader:
+            for X, y, mask in dataloader:
                 figure.add_subplot(rows,cols, sample_no*cols+1)
                 plt.axis("off")
                 plt.imshow(X.squeeze(), cmap="gray")
                 images, labels = X.to(device), y.to(device)
             
                 test = Variable(images.view(-1, 1, 28, 28))
-                sampler_X    = Variable(torch.randn(test.size()).to(device))
+                sampler_X    = Variable(mask).to(device)
                 sampler_pred=sampler_X
                 for itr in range(0, self.loop_parameter):
                     if self.context:
@@ -97,11 +98,11 @@ class TrainSamplerClassifier(object):
         dataloader = DataLoader(self.test_dataset, batch_size=64)
         num_batches = len(dataloader)
         with torch.no_grad():
-            for X, y in dataloader:
+            for X, y , mask in dataloader:
                 images, labels = X.to(device), y.to(device)
             
                 test = Variable(images.view(-1, 1, 28, 28))
-                sampler_X    = Variable(torch.randn(test.size()).to(device))
+                sampler_X    = Variable(mask).to(device)
                 sampler_pred=sampler_X
                 for itr in range(0, self.loop_parameter):
                     if self.context:
@@ -116,10 +117,12 @@ class TrainSamplerClassifier(object):
                 total += len(labels)
             accuracy = correct * 100 / total
         print("Test Accuracy: {}%".format(accuracy))
+        return accuracy
 
     def train(self, num_epochs):
         epoch_start_time = time.time()
         print(self.loop_parameter)
+        best_acc=-1
         while num_epochs is None or self.epoch < num_epochs:
             self.classifier_model.train()
             self.sampler_model.train()
@@ -127,10 +130,14 @@ class TrainSamplerClassifier(object):
             self.visualize_and_save('train_epoch_'+str(self.epoch)+'.png',self.classifier_dataset)
             self.classifier_model.eval()
             self.sampler_model.eval()
-            self.test_loop_sampler()
+            current_accuracy=self.test_loop_sampler()
+            if best_acc<current_accuracy:
+                best_acc=current_accuracy
+                self.save_sampler_and_classifier()
+
+                
             self.visualize_and_save('test_epoch_'+str(self.epoch)+'.png',self.test_dataset)
             self.epoch+=1
-        self.save_sampler_and_classifier()
         #self.eval_epoch
         #self.evaluate_samplesloop_param
     def _run_epoch(self,dataset,eval=False):
@@ -159,7 +166,7 @@ class TrainSamplerClassifier(object):
                 data_X, data_y = classifier_data[0].to(device), classifier_data[1].to(device)
                 classifier_X = Variable(data_X.view(-1,1, 28, 28))
                 classifier_y= Variable(data_y)
-                sampler_X    = Variable(torch.randn(classifier_X.size()).to(device))
+                sampler_X    = Variable(classifier_data[2]).to(device)
                 sampler_pred=sampler_X
                 loss=0
                 for itr in range(0, self.loop_parameter):
@@ -213,6 +220,7 @@ if __name__ == '__main__':
     writer = SummaryWriter(save_path)
     context=True if args.context==1 else False
     classifier_data = datasets.FashionMNIST(root="data",train=True,download=True,transform=transforms.Compose([transforms.ToTensor()]))
+    
     test_data = datasets.FashionMNIST(root="data", train=False,download=True,transform=transforms.Compose([transforms.ToTensor()]))
     #classifier_dataloader = DataLoader(training_data, batch_size=64, shuffle=True)
     #eval_dataloader = DataLoader(test_data, batch_size=64, shuffle=True)
@@ -223,6 +231,8 @@ if __name__ == '__main__':
     mask_per = args.mask_ratio
     loop_parameter = args.loop_param
     sampler_model=SamplerNetwork(int(mask_per*784))
+    classifier_data=RandomMaskDataset(classifier_data,int(mask_per*784))
+    test_data=RandomMaskDataset(test_data,int(mask_per*784))
     print(mask_per)
     print(context)
     classifier_model=ClassifierNetwork()
