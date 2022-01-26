@@ -16,6 +16,8 @@ import argparse
 import os
 from torch.utils.tensorboard import SummaryWriter
 from generaterandommask import RandomMaskDataset
+import wandb
+
 torch.cuda.is_available()
 labels_map = {
     0: "T-Shirt",
@@ -53,11 +55,11 @@ class TrainSamplerClassifier(object):
 
     def visualize_and_save(self,filename,dataset,no_samples=5):
 
-        dataloader = DataLoader(dataset, batch_size=1, shuffle=True)
+        dataloader  = DataLoader(dataset, batch_size=1, shuffle=True)
         num_batches = len(dataloader)
-        sample_no=0
-        figure = plt.figure(figsize=(8, 8))
-        rows,cols = no_samples, self.loop_parameter+1
+        sample_no   = 0
+        figure      = plt.figure(figsize=(8, 8))
+        rows,cols   = no_samples, self.loop_parameter+1
         
    
         with torch.no_grad():
@@ -103,25 +105,28 @@ class TrainSamplerClassifier(object):
             
                 test = Variable(images.view(-1, 1, 28, 28))
                 sampler_X    = Variable(mask).to(device)
-                sampler_pred=sampler_X
+                sampler_pred = sampler_X
                 for itr in range(0, self.loop_parameter):
                     if self.context:
                         sampler_pred=sampler_pred*test
                     sampler_pred = self.sampler_model(sampler_pred)
-                    filter_out_image=test*sampler_pred
-                    outputs= self.classifier_model(filter_out_image)
+                    filter_out_image = test*sampler_pred
+                    outputs = self.classifier_model(filter_out_image)
                    
             
                 predictions = torch.max(outputs, 1)[1].to(device)
                 correct += (predictions == labels).sum()
                 total += len(labels)
-            accuracy = correct * 100 / total
-        print("Test Accuracy: {}%".format(accuracy))
-        return accuracy
+            validation_accuracy = correct * 100 / total
+        print("Test Accuracy: {}%".format(validation_accuracy))
+        wandb.log({"Test accuracy": validation_accuracy})
 
     def train(self, num_epochs):
         epoch_start_time = time.time()
         print(self.loop_parameter)
+        wandb.init("Sampler_classifier")
+        wandb.watch(self.classifier_model, log="all")
+        wandb.watch(self.sampler_model, log="all")
         best_acc=-1
         while num_epochs is None or self.epoch < num_epochs:
             self.classifier_model.train()
@@ -130,52 +135,50 @@ class TrainSamplerClassifier(object):
             self.visualize_and_save('train_epoch_'+str(self.epoch)+'.png',self.classifier_dataset)
             self.classifier_model.eval()
             self.sampler_model.eval()
-            current_accuracy=self.test_loop_sampler()
-            if best_acc<current_accuracy:
-                best_acc=current_accuracy
+            current_accuracy = self.test_loop_sampler()
+            if best_acc < current_accuracy:
+                best_acc = current_accuracy
                 self.save_sampler_and_classifier()
 
-                
             self.visualize_and_save('test_epoch_'+str(self.epoch)+'.png',self.test_dataset)
             self.epoch+=1
+        wandb.finish()
         #self.eval_epoch
         #self.evaluate_samplesloop_param
     def _run_epoch(self,dataset,eval=False):
         self.iters_per_epoch = int(len(dataset)/self.batch_size)
-        self.iter_starttime = time.time()
-        self.iter_in_epoch = 0
-        self.epoch_loss = 0
+        self.iter_starttime  = time.time()
+        self.iter_in_epoch   = 0
+        self.epoch_loss      = 0
         if eval:
             dataloader = td.DataLoader(dataset, batch_size=self.batch_size)
         else:
-
             dataloader = td.DataLoader(dataset, batch_size=self.batch_size,shuffle=True)
         with tqdm(dataloader, unit="batch") as tepoch:
             tepoch.set_description(f"Sampler Epoch {self.epoch}")
             for classifier_data in tepoch:
-                classifier_train=False
-                sampler_train=False
-                if self.iter_in_epoch==int(self.classifier_start*self.iters_per_epoch):
+                classifier_train = False
+                sampler_train    = False
+                if self.iter_in_epoch == int(self.classifier_start*self.iters_per_epoch):
                     tepoch.set_description(f"Classifier Epoch {self.epoch}")
-                    classifier_train=True
-                elif self.iter_in_epoch>int(self.classifier_start*self.iters_per_epoch):
-                    classifier_train=True
-
+                    classifier_train = True
+                elif self.iter_in_epoch > int(self.classifier_start*self.iters_per_epoch):
+                    classifier_train = True
                 else:
                     sampler_train=True
                 data_X, data_y = classifier_data[0].to(device), classifier_data[1].to(device)
-                classifier_X = Variable(data_X.view(-1,1, 28, 28))
-                classifier_y= Variable(data_y)
-                sampler_X    = Variable(classifier_data[2]).to(device)
-                sampler_pred=sampler_X
-                loss=0
+                classifier_X   = Variable(data_X.view(-1,1, 28, 28))
+                classifier_y   = Variable(data_y)
+                sampler_X      = Variable(classifier_data[2]).to(device)
+                sampler_pred   = sampler_X
+                loss           = 0
                 for itr in range(0, self.loop_parameter):
                     if self.context:
-                        sampler_pred=sampler_pred*classifier_X
+                        sampler_pred = sampler_pred*classifier_X
                     
-                    sampler_pred = self.sampler_model(sampler_pred)
-                    filter_out_image=classifier_X*sampler_pred
-                    classifier_pred = self.classifier_model(filter_out_image)
+                    sampler_pred     = self.sampler_model(sampler_pred)
+                    filter_out_image = classifier_X*sampler_pred
+                    classifier_pred  = self.classifier_model(filter_out_image)
                     loss += self.classifier_loss_fn(classifier_pred, classifier_y)
 
                 predictions = torch.max(classifier_pred, 1)[1].to(device)
@@ -196,6 +199,7 @@ class TrainSamplerClassifier(object):
                 self.iter_in_epoch += 1
         self.epoch_loss = loss.data
         writer.add_scalar("Training loss: epoch:", self.epoch_loss, self.epoch)
+        wandb.log({"Train Loss": self.epoch_loss , "Epoch": self.epoch})
 
 writer = SummaryWriter()
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
@@ -228,30 +232,29 @@ if __name__ == '__main__':
     #classifier_dataloader = DataLoader(training_data, batch_size=64, shuffle=True)
     #eval_dataloader = DataLoader(test_data, batch_size=64, shuffle=True)
    
-    learning_rate = 1e-3
-    batch_size = 64
-    epochs = 10
-    mask_per = args.mask_ratio
-    loop_parameter = args.loop_param
+    learning_rate    = 1e-3
+    batch_size       = 64
+    epochs           = 10
+    mask_per         = args.mask_ratio
+    loop_parameter   = args.loop_param
     classifier_start = 0.25
-    sampler_model=SamplerNetwork(int(mask_per*784))
-    classifier_data=RandomMaskDataset(classifier_data,int(mask_per*784))
-    test_data=RandomMaskDataset(test_data,int(mask_per*784))
+    sampler_model    = SamplerNetwork(int(mask_per*784))
+    classifier_data  = RandomMaskDataset(classifier_data,int(mask_per*784))
+    test_data        = RandomMaskDataset(test_data,int(mask_per*784))
     print(mask_per)
     print(context)
-    classifier_model=ClassifierNetwork()
+    classifier_model = ClassifierNetwork()
     if pre_clr == True:
         cp = torch.load('models/Epoch_9.pth')
-        classifier_model.load_state_dict(cp['model_state_dict']))
+        classifier_model.load_state_dict(cp['model_state_dict'])
         classifier_start = 1
     sampler_model.to(device)
     classifier_model.to(device)
     sampler_optimizer    = torch.optim.Adam(sampler_model.parameters(), lr=learning_rate)
     classifier_optimizer = torch.optim.Adam(classifier_model.parameters(), lr=learning_rate)
-    classifier_loss_fn = nn.CrossEntropyLoss()
+    classifier_loss_fn   = nn.CrossEntropyLoss()
     
-    trainer=TrainSamplerClassifier(classifier_dataset=classifier_data,sampler_model=sampler_model,classifier_model=classifier_model,classifier_loss_fn=classifier_loss_fn,sampler_optimizer=sampler_optimizer,test_dataset=test_data,classifier_optimizer=classifier_optimizer,loop_parameter=loop_parameter,context=context,save_path=save_path, classifier_start=classifier_start)
+    trainer = TrainSamplerClassifier(classifier_dataset=classifier_data,sampler_model=sampler_model,classifier_model=classifier_model,classifier_loss_fn=classifier_loss_fn,sampler_optimizer=sampler_optimizer,test_dataset=test_data,classifier_optimizer=classifier_optimizer,loop_parameter=loop_parameter,context=context,save_path=save_path, classifier_start=classifier_start)
     
     trainer.visualize_and_save('before_training'+'.png',trainer.test_dataset)
     trainer.train(epochs)
- 
