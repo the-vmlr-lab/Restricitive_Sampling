@@ -244,8 +244,8 @@ if __name__ == '__main__':
     loop_parameter   = args.loop_param
     classifier_start = 0.25
     sampler_model = SamplerNetwork(int(mask_per*1024*3))
-    classifier_data  = RandomMaskDataset(classifier_data,int(mask_per*784))
-    test_data        = RandomMaskDataset(test_data,int(mask_per*784))
+    classifier_data  = RandomMaskDataset(classifier_data,int(mask_per*1024*3))
+    test_data        = RandomMaskDataset(test_data,int(mask_per*1024*3))
     print(mask_per)
     print(context)
     classifier_model = ResNet101()
