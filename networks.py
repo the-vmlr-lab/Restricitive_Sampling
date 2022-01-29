@@ -9,21 +9,21 @@ from torch import nn
 
 class FilterOutMask(nn.Module):
     """Implemeted using conv layers"""
-    def __init__(self, k,gpu):
+    def __init__(self, k, gpu):
 
         super(FilterOutMask, self).__init__()
-        self.k=k
-        self.gpu=gpu
+        self.k = k
+        self.gpu = gpu
 
 
     def forward(self, output_a):
-        output_flat=torch.flatten(output_a,start_dim=1)
-        top_k,top_k_indices=torch.topk(output_flat,self.k,1)
-        mask=torch.zeros(output_flat.shape)
-        src=torch.ones(top_k_indices.shape)
+        output_flat = torch.flatten(output_a,start_dim=1)
+        top_k, top_k_indices = torch.topk(output_flat,self.k,1)
+        mask = torch.zeros(output_flat.shape)
+        src  = torch.ones(top_k_indices.shape)
         if self.gpu:
-            mask=mask.cuda()
-            src=src.cuda()
+            mask = mask.cuda()
+            src  = src.cuda()
         mask = mask.scatter(1, top_k_indices, src)
         return mask
 
@@ -32,7 +32,7 @@ class SamplerNetwork(nn.Module):
         super(SamplerNetwork, self).__init__()
         self.conv_1 = nn.Sequential(
             nn.Conv2d(
-                in_channels=1,
+                in_channels=3,
                 out_channels=32,
                 kernel_size=3,
                 padding=1),
@@ -69,7 +69,7 @@ class SamplerNetwork(nn.Module):
         self.deconv_2 = nn.Sequential(
             nn.ConvTranspose2d(
                 in_channels=32,
-                out_channels=1,
+                out_channels=3,
                 kernel_size = 3,
                 stride=2,
                 padding=1, 
@@ -79,10 +79,10 @@ class SamplerNetwork(nn.Module):
 
         self.drop = nn.Dropout2d(0.25)
         print(gpu)
-        self.filter=FilterOutMask(k,gpu)
+        self.filter = FilterOutMask(k, gpu)
 
     def forward(self, x):
-        input_shape=x.shape
+        input_shape = x.shape
         out = self.conv_1(x) 
         out = self.conv_2(out)
         out = self.deconv_1(out)
@@ -133,15 +133,15 @@ class ClassifierNetwork(nn.Module):
         
         return out
 if __name__ == '__main__':
-    sampler_model = SamplerNetwork(int(0.5*784),gpu=False)
+    sampler_model = SamplerNetwork(int(0.5*3*1024),gpu=False)
     print(type(sampler_model))
-    ip = torch.rand(1, 1, 28, 28, requires_grad=False)
+    ip = torch.rand(1, 3, 32, 32, requires_grad=False)
 
     out = sampler_model(ip)
-    plt.imshow(ip.squeeze(), cmap="gray")
+    plt.imshow(ip.squeeze().permute(1, 2, 0), cmap="BrBG")
     plt.show()
     plt.clf()
     print(out.detach().numpy().squeeze())
-    plt.imshow(out.detach().numpy().squeeze())
+    plt.imshow(out.detach().squeeze().permute(1, 2, 0))
     plt.show()
 
