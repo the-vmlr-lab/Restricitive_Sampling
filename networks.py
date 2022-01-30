@@ -12,13 +12,13 @@ class FilterOutMask(nn.Module):
     def __init__(self, k, gpu):
 
         super(FilterOutMask, self).__init__()
-        self.k = k
+        self.k   = k
         self.gpu = gpu
 
 
     def forward(self, output_a):
-        output_flat = torch.flatten(output_a,start_dim=1)
-        top_k, top_k_indices = torch.topk(output_flat,self.k,1)
+        output_flat = torch.flatten(output_a, start_dim=1)
+        top_k, top_k_indices = torch.topk(output_flat, self.k,1)
         mask = torch.zeros(output_flat.shape)
         src  = torch.ones(top_k_indices.shape)
         if self.gpu:
@@ -69,7 +69,7 @@ class SamplerNetwork(nn.Module):
         self.deconv_2 = nn.Sequential(
             nn.ConvTranspose2d(
                 in_channels=32,
-                out_channels=3,
+                out_channels=1,
                 kernel_size = 3,
                 stride=2,
                 padding=1, 
@@ -88,7 +88,7 @@ class SamplerNetwork(nn.Module):
         out = self.deconv_1(out)
         out = self.deconv_2(out)
         out = self.filter(out)
-        out=out.view(input_shape)
+        out = out.view(input_shape[2], input_shape[3])
         return out
 class ClassifierNetwork(nn.Module):
     def __init__(self):
@@ -133,7 +133,7 @@ class ClassifierNetwork(nn.Module):
         
         return out
 if __name__ == '__main__':
-    sampler_model = SamplerNetwork(int(0.5*3*1024),gpu=False)
+    sampler_model = SamplerNetwork(int(0.5*1024),gpu=False)
     print(type(sampler_model))
     ip = torch.rand(1, 3, 32, 32, requires_grad=False)
 
@@ -142,6 +142,6 @@ if __name__ == '__main__':
     plt.show()
     plt.clf()
     print(out.detach().numpy().squeeze())
-    plt.imshow(out.detach().squeeze().permute(1, 2, 0))
+    plt.imshow(out.detach().squeeze(), cmap='gray')
     plt.show()
 

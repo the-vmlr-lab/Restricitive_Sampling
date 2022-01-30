@@ -37,21 +37,21 @@ labels_map = {
 
 class TrainSamplerClassifier(object):
     def __init__(self,classifier_dataset,sampler_model,classifier_model,classifier_loss_fn,sampler_optimizer,test_dataset,classifier_optimizer, classifier_scheduler, loop_parameter,context,save_path,classifier_start):
-        self.classifier_dataset=classifier_dataset
-        self.sampler_model=sampler_model
-        self.classifier_model=classifier_model
-        self.classifier_loss_fn=classifier_loss_fn
-        self.sampler_optimizer=sampler_optimizer
-        self.loop_parameter=loop_parameter
-        self.test_dataset=test_dataset
-        self.epoch=0
-        self.classifier_optimizer=classifier_optimizer
-        self.classifier_scheduler=classifier_scheduler
-        self.batch_size=64
-        self.classifier_start=classifier_start
-        self.context=context
-        self.save_path=save_path
-        self.test_dataset=test_dataset
+        self.classifier_dataset   = classifier_dataset
+        self.sampler_model        = sampler_model
+        self.classifier_model     = classifier_model
+        self.classifier_loss_fn   = classifier_loss_fn
+        self.sampler_optimizer    = sampler_optimizer
+        self.loop_parameter       = loop_parameter
+        self.test_dataset         = test_dataset
+        self.epoch                = 0
+        self.classifier_optimizer = classifier_optimizer
+        self.classifier_scheduler = classifier_scheduler
+        self.batch_size           = 64
+        self.classifier_start     = classifier_start
+        self.context              = context
+        self.save_path            = save_path
+        self.test_dataset         = test_dataset
     def save_sampler_and_classifier(self):
 
         torch.save(self.classifier_model.state_dict(), os.path.join(self.save_path,'class.pkl'))
@@ -73,17 +73,17 @@ class TrainSamplerClassifier(object):
                 plt.imshow(X.squeeze().permute(1, 2, 0), cmap="BrBG")
                 images, labels = X.to(device), y.to(device)
             
-                test = Variable(images.view(-1, 3, 32, 32))
+                test         = Variable(images.view(-1, 3, 32, 32))
                 sampler_X    = Variable(mask).to(device)
-                sampler_pred=sampler_X
+                sampler_pred = sampler_X
                 for itr in range(0, self.loop_parameter):
                     if self.context:
                         sampler_pred = sampler_pred*test
                     sampler_pred = self.sampler_model(sampler_pred)
                     
-                    filter_out_image = test*sampler_pred
-                    outputs = self.classifier_model(filter_out_image)
-                    predictions = torch.max(outputs, 1)[1].to(device)
+                    filter_out_image = test * sampler_pred
+                    outputs          = self.classifier_model(filter_out_image)
+                    predictions      = torch.max(outputs, 1)[1].to(device)
                     
                     figure.add_subplot(rows,cols, sample_no*cols+itr+2)
                     plt.title(str(labels_map[int(predictions.detach().cpu().numpy().squeeze())]))
@@ -165,7 +165,7 @@ class TrainSamplerClassifier(object):
             tepoch.set_description(f"Sampler Epoch {self.epoch}")
             for classifier_data in tepoch:
                 classifier_train = False
-                sampler_train = False
+                sampler_train    = False
                 if self.iter_in_epoch == int(self.classifier_start*self.iters_per_epoch):
                     tepoch.set_description(f"Classifier Epoch {self.epoch}")
                     classifier_train = True
@@ -183,9 +183,9 @@ class TrainSamplerClassifier(object):
                     if self.context:
                         sampler_pred = sampler_pred*classifier_X
                     
-                    sampler_pred = self.sampler_model(sampler_pred)
+                    sampler_pred     = self.sampler_model(sampler_pred)
                     filter_out_image = classifier_X*sampler_pred
-                    classifier_pred = self.classifier_model(filter_out_image)
+                    classifier_pred  = self.classifier_model(filter_out_image)
                     loss += self.classifier_loss_fn(classifier_pred, classifier_y)
 
                 predictions = torch.max(classifier_pred, 1)[1].to(device)
@@ -243,7 +243,7 @@ if __name__ == '__main__':
     mask_per         = args.mask_ratio
     loop_parameter   = args.loop_param
     classifier_start = 0.25
-    sampler_model = SamplerNetwork(int(mask_per*1024*3))
+    sampler_model    = SamplerNetwork(int(mask_per*1024*3))
     classifier_data  = RandomMaskDataset(classifier_data,int(mask_per*1024*3))
     test_data        = RandomMaskDataset(test_data,int(mask_per*1024*3))
     print(mask_per)
