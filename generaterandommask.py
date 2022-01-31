@@ -32,13 +32,13 @@ class RandomMaskDataset(Dataset):
         return len(self.base_dataset)
 
     def __getitem__(self, idx):
-  
 
-        X,y=self.base_dataset[idx]
 
-        mask          = torch.zeros(X.shape[1]*X.shape[2])
+        X, y = self.base_dataset[idx]
+
+        mask          = torch.zeros(X.shape[1] * X.shape[2])
         choice_list   = [i for i in range(len(mask))]
-        choices       = random.choices(choice_list,k=self.mask_pixels)
+        choices       = random.choices(choice_list, k = self.mask_pixels)
 
         mask[choices] = 1
         mask          = mask.view(X.shape[1], X.shape[2])

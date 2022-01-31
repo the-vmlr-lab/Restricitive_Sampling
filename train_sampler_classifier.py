@@ -69,7 +69,7 @@ class TrainSamplerClassifier(object):
    
         with torch.no_grad():
             for X, y, mask in dataloader:
-                figure.add_subplot(rows,cols, sample_no*cols+1)
+                figure.add_subplot(rows,cols, sample_no * cols + 1)
                 plt.axis("off")
                 plt.imshow(X.squeeze().permute(1, 2, 0), cmap="BrBG")
                 images, labels = X.to(device), y.to(device)
@@ -79,13 +79,13 @@ class TrainSamplerClassifier(object):
                 sampler_pred = sampler_X
                 for itr in range(0, self.loop_parameter):
                     if self.context:
-                        sampler_pred = sampler_pred * test
+                        sampler_pred = torch.unsqueeze(sampler_pred, 1)  * test
                     else:
                         broadcaster  = torch.ones(test.shape)
-                        sampler_pred = sampler_pred * broadcaster
+                        sampler_pred = torch.unsqueeze(sampler_pred, 1) * broadcaster
 
                     sampler_pred     = self.sampler_model(sampler_pred)
-                    filter_out_image = test * sampler_pred
+                    filter_out_image = torch.unsqueeze(sampler_pred, 1)  * test
                     outputs          = self.classifier_model(filter_out_image)
                     predictions      = torch.max(outputs, 1)[1].to(device)
                     
@@ -116,13 +116,13 @@ class TrainSamplerClassifier(object):
                 sampler_pred   = sampler_X
                 for itr in range(0, self.loop_parameter):
                     if self.context:
-                        sampler_pred = sampler_pred * test
+                        sampler_pred = torch.unsqueeze(sampler_pred, 1)  * test
                     else:
                         broadcaster  = torch.ones(test.shape)
-                        sampler_pred = sampler_pred * broadcaster
+                        sampler_pred = torch.unsqueeze(sampler_pred, 1) * broadcaster
 
                     sampler_pred     = self.sampler_model(sampler_pred)
-                    filter_out_image = test * sampler_pred
+                    filter_out_image = torch.unsqueeze(sampler_pred, 1)  * test
                     outputs          = self.classifier_model(filter_out_image)
                    
             
@@ -135,6 +135,7 @@ class TrainSamplerClassifier(object):
         print("Test Accuracy: {}% Current LR: {}".format(validation_accuracy, curr_lr))
         wandb.log({"Test accuracy": validation_accuracy, "Learning Rate": curr_lr})
         classifier_scheduler.step(validation_accuracy)
+        return validation_accuracy
 
     def train(self, num_epochs):
         epoch_start_time = time.time()
@@ -142,6 +143,7 @@ class TrainSamplerClassifier(object):
         wandb.init("Sampler_classifier")
         wandb.watch(self.classifier_model, log = "all")
         wandb.watch(self.sampler_model, log = "all")
+        best_acc = 0
         while num_epochs is None or self.epoch < num_epochs:
             self.classifier_model.train()
             self.sampler_model.train()
@@ -188,13 +190,13 @@ class TrainSamplerClassifier(object):
                 loss           = 0
                 for itr in range(0, self.loop_parameter):
                     if self.context:
-                        sampler_pred = sampler_pred * classifier_X
+                        sampler_pred = torch.unsqueeze(sampler_pred, 1) * classifier_X
                     else:
                         broadcaster  = torch.ones(classifier_X.shape)
-                        sampler_pred = sampler_pred * broadcaster
+                        sampler_pred = torch.unsqueeze(sampler_pred, 1) * broadcaster
                     
                     sampler_pred     = self.sampler_model(sampler_pred)
-                    filter_out_image = classifier_X * sampler_pred
+                    filter_out_image = torch.unsqueeze(sampler_pred, 1) * classifier_X
                     classifier_pred  = self.classifier_model(filter_out_image)
                     loss += self.classifier_loss_fn(classifier_pred, classifier_y)
 
@@ -241,7 +243,7 @@ if __name__ == '__main__':
         os.mkdir(save_path)
     writer  = SummaryWriter(save_path)
     context = True 
-    pre_clr = True if args.context==1 else False
+    pre_clr = True if args.context == 1 else False
     classifier_data = datasets.CIFAR10(root="data",train=True,download=True,transform=transforms.Compose([transforms.ToTensor()]))
     test_data = datasets.CIFAR10(root="data", train=False,download=True,transform=transforms.Compose([transforms.ToTensor()]))
     #classifier_dataloader = DataLoader(training_data, batch_size=64, shuffle=True)
@@ -253,7 +255,7 @@ if __name__ == '__main__':
     mask_per         = args.mask_ratio
     loop_parameter   = args.loop_param
     classifier_start = 0.25
-    sampler_model    = SamplerNetwork(int(mask_per*1024*3))
+    sampler_model    = SamplerNetwork(int(mask_per*1024))
     classifier_data  = RandomMaskDataset(classifier_data,int(mask_per*1024*3))
     test_data        = RandomMaskDataset(test_data,int(mask_per*1024*3))
     print(mask_per)

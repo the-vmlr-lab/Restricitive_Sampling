@@ -88,7 +88,7 @@ class SamplerNetwork(nn.Module):
         out = self.deconv_1(out)
         out = self.deconv_2(out)
         out = self.filter(out)
-        out = out.view(input_shape[2], input_shape[3])
+        out = out.view(-1, input_shape[2], input_shape[3])
         return out
 class ClassifierNetwork(nn.Module):
     def __init__(self):
