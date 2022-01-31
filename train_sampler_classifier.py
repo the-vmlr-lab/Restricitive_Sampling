@@ -1,4 +1,5 @@
 
+from numpy import identity
 import torch
 from torch.utils.data import Dataset
 from torchvision import datasets
@@ -23,16 +24,16 @@ import wandb
 
 torch.cuda.is_available()
 labels_map = {
-    0: "T-Shirt",
-    1: "Trouser",
-    2: "Pullover",
-    3: "Dress",
-    4: "Coat",
-    5: "Sandal",
-    6: "Shirt",
-    7: "Sneaker",
-    8: "Bag",
-    9: "Ankle Boot",
+    0: "airplane",
+    1: "automobile",
+    2: "bird",
+    3: "cat",
+    4: "deer",
+    5: "dog",
+    6: "frog",
+    7: "horse",
+    8: "ship",
+    9: "truck",
 }
 
 class TrainSamplerClassifier(object):
@@ -78,9 +79,12 @@ class TrainSamplerClassifier(object):
                 sampler_pred = sampler_X
                 for itr in range(0, self.loop_parameter):
                     if self.context:
-                        sampler_pred = sampler_pred*test
-                    sampler_pred = self.sampler_model(sampler_pred)
-                    
+                        sampler_pred = sampler_pred * test
+                    else:
+                        broadcaster  = torch.ones(test.shape)
+                        sampler_pred = sampler_pred * broadcaster
+
+                    sampler_pred     = self.sampler_model(sampler_pred)
                     filter_out_image = test * sampler_pred
                     outputs          = self.classifier_model(filter_out_image)
                     predictions      = torch.max(outputs, 1)[1].to(device)
@@ -107,20 +111,24 @@ class TrainSamplerClassifier(object):
             for X, y , mask in dataloader:
                 images, labels = X.to(device), y.to(device)
             
-                test = Variable(images.view(-1, 3, 32, 32))
-                sampler_X    = Variable(mask).to(device)
-                sampler_pred = sampler_X
+                test           = Variable(images.view(-1, 3, 32, 32))
+                sampler_X      = Variable(mask).to(device)
+                sampler_pred   = sampler_X
                 for itr in range(0, self.loop_parameter):
                     if self.context:
-                        sampler_pred = sampler_pred*test
-                    sampler_pred = self.sampler_model(sampler_pred)
-                    filter_out_image = test*sampler_pred
-                    outputs = self.classifier_model(filter_out_image)
+                        sampler_pred = sampler_pred * test
+                    else:
+                        broadcaster  = torch.ones(test.shape)
+                        sampler_pred = sampler_pred * broadcaster
+
+                    sampler_pred     = self.sampler_model(sampler_pred)
+                    filter_out_image = test * sampler_pred
+                    outputs          = self.classifier_model(filter_out_image)
                    
             
                 predictions = torch.max(outputs, 1)[1].to(device)
-                correct += (predictions == labels).sum()
-                total += len(labels)
+                correct    += (predictions == labels).sum()
+                total      += len(labels)
             validation_accuracy = correct * 100 / total
 
         curr_lr = classifier_optimizer.param_groups[0]['lr']
@@ -132,8 +140,8 @@ class TrainSamplerClassifier(object):
         epoch_start_time = time.time()
         print(self.loop_parameter)
         wandb.init("Sampler_classifier")
-        wandb.watch(self.classifier_model, log="all")
-        wandb.watch(self.sampler_model, log="all")
+        wandb.watch(self.classifier_model, log = "all")
+        wandb.watch(self.sampler_model, log = "all")
         while num_epochs is None or self.epoch < num_epochs:
             self.classifier_model.train()
             self.sampler_model.train()
@@ -176,15 +184,17 @@ class TrainSamplerClassifier(object):
                 data_X, data_y = classifier_data[0].to(device), classifier_data[1].to(device)
                 classifier_X   = Variable(data_X.view(-1,3, 32, 32))
                 classifier_y   = Variable(data_y)
-                sampler_X      = Variable(classifier_data[2]).to(device)
-                sampler_pred   = sampler_X
+                sampler_pred   = Variable(classifier_data[2]).to(device)
                 loss           = 0
                 for itr in range(0, self.loop_parameter):
                     if self.context:
-                        sampler_pred = sampler_pred*classifier_X
+                        sampler_pred = sampler_pred * classifier_X
+                    else:
+                        broadcaster  = torch.ones(classifier_X.shape)
+                        sampler_pred = sampler_pred * broadcaster
                     
                     sampler_pred     = self.sampler_model(sampler_pred)
-                    filter_out_image = classifier_X*sampler_pred
+                    filter_out_image = classifier_X * sampler_pred
                     classifier_pred  = self.classifier_model(filter_out_image)
                     loss += self.classifier_loss_fn(classifier_pred, classifier_y)
 
@@ -226,7 +236,7 @@ if __name__ == '__main__':
     parser.add_argument('-pretrained_classifier', dest='pre_clr', type=int, default=0,
                         help = 'pretrained_classifier')
     args = parser.parse_args()
-    save_path=os.path.join(args.save_path,args.model_name)
+    save_path = os.path.join(args.save_path,args.model_name)
     if not os.path.exists(save_path):
         os.mkdir(save_path)
     writer  = SummaryWriter(save_path)

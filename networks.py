@@ -18,7 +18,7 @@ class FilterOutMask(nn.Module):
 
     def forward(self, output_a):
         output_flat = torch.flatten(output_a, start_dim=1)
-        top_k, top_k_indices = torch.topk(output_flat, self.k,1)
+        top_k, top_k_indices = torch.topk(output_flat, self.k, 1)
         mask = torch.zeros(output_flat.shape)
         src  = torch.ones(top_k_indices.shape)
         if self.gpu:
