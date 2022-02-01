@@ -92,7 +92,7 @@ class TrainSamplerClassifier(object):
                     figure.add_subplot(rows,cols, sample_no*cols+itr+2)
                     plt.title(str(labels_map[int(predictions.detach().cpu().numpy().squeeze())]))
                     plt.axis("off")
-                    plt.imshow(sampler_pred.detach().cpu().squeeze().permute(1, 2, 0))
+                    plt.imshow(sampler_pred.detach().cpu().squeeze())
                
                 sample_no += 1
                 if sample_no > no_samples-1:
