@@ -186,11 +186,11 @@ class TrainSamplerClassifier(object):
                 data_X, data_y = classifier_data[0].to(device), classifier_data[1].to(device)
                 classifier_X   = Variable(data_X.view(-1,3, 32, 32))
                 classifier_y   = Variable(data_y)
-                sampler_pred   = Variable(classifier_data[2]).to(device)
+                sampler_pred   = Variable(classifier_data[2]).to(device) # -1, 1, 32, 32
                 loss           = 0
                 for itr in range(0, self.loop_parameter):
                     if self.context:
-                        sampler_pred = torch.unsqueeze(sampler_pred, 1) * classifier_X
+                        sampler_pred = torch.unsqueeze(sampler_pred, 1) * classifier_X ## -
                     else:
                         broadcaster  = torch.ones(classifier_X.shape)
                         sampler_pred = torch.unsqueeze(sampler_pred, 1) * broadcaster
@@ -256,8 +256,8 @@ if __name__ == '__main__':
     loop_parameter   = args.loop_param
     classifier_start = 0.25
     sampler_model    = SamplerNetwork(int(mask_per*1024))
-    classifier_data  = RandomMaskDataset(classifier_data,int(mask_per*1024*3))
-    test_data        = RandomMaskDataset(test_data,int(mask_per*1024*3))
+    classifier_data  = RandomMaskDataset(classifier_data,int(mask_per*1024))
+    test_data        = RandomMaskDataset(test_data,int(mask_per*1024))
     print(mask_per)
     print(context)
     classifier_model = ResNet101()

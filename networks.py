@@ -28,7 +28,7 @@ class FilterOutMask(nn.Module):
         return mask
 
 class SamplerNetwork(nn.Module):
-    def __init__(self,k,gpu=True):
+    def __init__(self, k, gpu=True):
         super(SamplerNetwork, self).__init__()
         self.conv_1 = nn.Sequential(
             nn.Conv2d(
