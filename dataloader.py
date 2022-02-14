@@ -3,10 +3,11 @@ import os
 import torch
 from pytorch_lightning import LightningDataModule
 import matplotlib.pyplot as plt
-from torch.utils.data import Dataset, DataLoader, random_split
+from torch.utils.data import Dataset, DataLoader, random_split, RandomSampler, Subset
 from torchvision import transforms
 from torchvision.datasets import CIFAR10
 import random
+import numpy as np
 # Ignore warnings
 import warnings
 warnings.filterwarnings("ignore")
@@ -68,6 +69,14 @@ class CustomCIFAR10DataModule(LightningDataModule):
 
     def test_dataloader(self):
         return DataLoader(self.test_dataset, batch_size=self.batch_size)
+
+    def visualizer_dataloader(self):
+        num_train_samples = 5
+        sample_ds = Subset(self.train_dataset, np.arange(num_train_samples))
+        sample_sampler = RandomSampler(sample_ds)
+        sample_dl = DataLoader(sample_ds, sampler=sample_sampler, batch_size=1)
+
+        return sample_dl
 
 if __name__ == '__main__':
     CIFAR10_dm = CustomCIFAR10DataModule()
