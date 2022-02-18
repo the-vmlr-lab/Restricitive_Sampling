@@ -196,9 +196,6 @@ class Sampler_Classifer_Network(LightningModule):
         correct     = (predictions == classifier_y).sum()
         accuracy    = correct / classifier_X.size()[0]
 
-        self.log("Training accuracy", accuracy, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-        self.log("Loss", loss, on_step=False, on_epoch=True, prog_bar=True, logger=True)
-
         if sampler_train:
             sampler_optimizer.zero_grad()
             self.manual_backward(loss)
@@ -284,7 +281,7 @@ if __name__ == '__main__':
     CIFAR10_dm.prepare_data()
     CIFAR10_dm.setup()
 
-    sampler_model    = SamplerNetwork(int(0.5*1024))
+    sampler_model    = SamplerNetwork(int(mask_per*1024))
     classifier_model = ClassifierNetwork()
     main_model       = Sampler_Classifer_Network(sampler_model, classifier_model, loop_parameter, classifier_start, mask_per, save_path)
     trainer          = Trainer(gpus=1, accelerator="gpu", max_epochs=epochs)
