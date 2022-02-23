@@ -2,6 +2,7 @@ import os, argparse, random
 import torch
 import matplotlib.pyplot as plt
 from torch import nn
+from torch.optim import lr_scheduler
 import torchvision
 from torchvision import models
 from torch.utils.data import DataLoader
@@ -99,6 +100,7 @@ class SamplerNetwork(nn.Module):
         out = self.conv_2(out)
         out = self.deconv_1(out)
         out = self.deconv_2(out)
+        out = self.drop(out)
         out = self.filter(out)
         out = out.view(-1, input_shape[2], input_shape[3])
         return out
@@ -129,6 +131,7 @@ class Sampler_Classifer_Network(LightningModule):
         self.mask_per         = mask_per
         self.save_path        = save_path
         self.automatic_optimization = False
+        self.learning_rate = 1e-5
 
         wandb.init("Sampler_classifier")
         wandb.watch(self.classifier, log = "all")
@@ -183,7 +186,10 @@ class Sampler_Classifer_Network(LightningModule):
         else:
             sampler_train    = True
 
-        sampler_optimizer, classifier_optimizer = self.optimizers()
+        optimizers = self.optimizers()
+        schedulers = self.lr_schedulers()
+        sampler_optimizer, classifier_optimizer = optimizers[0], optimizers[1]
+        sampler_scheduler, classifier_scheduler = schedulers[0], schedulers[1]
 
         for _ in range(0, self.loop_parameter):
             sampler_pred     = torch.unsqueeze(sampler_pred, 1) * classifier_X
@@ -200,10 +206,12 @@ class Sampler_Classifer_Network(LightningModule):
             sampler_optimizer.zero_grad()
             self.manual_backward(loss)
             sampler_optimizer.step()
+            sampler_scheduler.step()
         elif classifier_train:
             classifier_optimizer.zero_grad()
             self.manual_backward(loss)
             classifier_optimizer.step()
+            classifier_scheduler.step()
 
         return {"Accuracy":accuracy, "Loss":loss}
 
@@ -216,8 +224,11 @@ class Sampler_Classifer_Network(LightningModule):
 
     def configure_optimizers(self):
         sampler_optimizer    = torch.optim.Adam(self.sampler.parameters(), lr=1e-3)
-        classifier_optimizer = torch.optim.Adam(self.classifier.parameters(), lr=1e-5)
-        return sampler_optimizer, classifier_optimizer
+        classifier_optimizer = torch.optim.Adam(self.classifier.parameters(), lr=self.learning_rate)
+        sampler_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(sampler_optimizer, self.trainer.max_epochs, 0, verbose=True)
+        classifier_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(classifier_optimizer, self.trainer.max_epochs, 0, verbose=True)
+                        
+        return [sampler_optimizer, classifier_optimizer], [sampler_scheduler, classifier_scheduler]
 
     def validation_step(self, batch, batch_idx):
         X, y = batch[0], batch[1]
@@ -284,5 +295,10 @@ if __name__ == '__main__':
     sampler_model    = SamplerNetwork(int(mask_per*1024))
     classifier_model = ClassifierNetwork()
     main_model       = Sampler_Classifer_Network(sampler_model, classifier_model, loop_parameter, classifier_start, mask_per, save_path)
-    trainer          = Trainer(gpus=1, accelerator="gpu", max_epochs=epochs)
+    trainer          = Trainer(gpus=1, max_epochs=epochs, profiler='simple', auto_lr_find=True)
+
+
+
+
     trainer.fit(main_model, CIFAR10_dm)
+
