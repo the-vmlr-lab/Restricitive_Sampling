@@ -16,7 +16,7 @@ warnings.filterwarnings("ignore")
 class RandomMaskDataset(Dataset):
     """Face Landmarks dataset."""
 
-    def __init__(self, dataset, mask_pixels):
+    def __init__(self, dataset, mask_pixels, transform=None):
         """
         Args:
             csv_file (string): Path to the csv file with annotations.
@@ -40,6 +40,8 @@ class RandomMaskDataset(Dataset):
         mask[choices] = 1
         mask          = mask.view(X.shape[1], X.shape[2])
         
+        if self.transform:
+            X = self.transform(X)
 
         return X, y, mask
 
@@ -47,16 +49,27 @@ class CustomCIFAR10DataModule(LightningDataModule):
     def __init__(self, batch_size=64):
         super().__init__()
         self.batch_size = batch_size
+        self.transform_train =  transforms.Compose([
+                                transforms.RandomCrop(32, padding=4),
+                                transforms.RandomHorizontalFlip(),
+                                transforms.ToTensor(),
+                                transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+                                ])
+
+        self.transform_test   = transforms.Compose([
+                                  transforms.ToTensor(),
+                                  transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+                                  ])
 
     def prepare_data(self):
-        CIFAR10(os.getcwd(), train=True,  download=True, transform=transforms.ToTensor())
-        CIFAR10(os.getcwd(), train=False, download=True, transform=transforms.ToTensor())
+        CIFAR10(os.getcwd(), train=True,  download=True, transform=self.transform_train)
+        CIFAR10(os.getcwd(), train=False, download=True, transform=self.transform_test)
 
     def setup(self):
         transform      = transforms.Compose([transforms.ToTensor()])
-        cifar10_train  = CIFAR10(os.getcwd(), train=True,  download=False, transform=transform)
-        cifar10_test   = CIFAR10(os.getcwd(), train=False, download=False, transform=transform)
-        custom_cifar10_train = RandomMaskDataset(cifar10_train, 10)
+        cifar10_train  = CIFAR10(os.getcwd(), train=True,  download=False, transform=self.transform_train)
+        cifar10_test   = CIFAR10(os.getcwd(), train=False, download=False, transform=self.transform_test)
+        custom_cifar10_train = RandomMaskDataset(cifar10_train, 10, transform = self.transform_train)
 
         self.train_dataset, self.val_dataset = random_split(custom_cifar10_train, [40000, 10000])
         self.test_dataset = cifar10_test
