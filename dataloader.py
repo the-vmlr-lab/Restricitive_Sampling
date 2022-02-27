@@ -16,7 +16,7 @@ warnings.filterwarnings("ignore")
 class RandomMaskDataset(Dataset):
     """Face Landmarks dataset."""
 
-    def __init__(self, dataset, mask_pixels, transform=None):
+    def __init__(self, dataset, mask_pixels):
         """
         Args:
             csv_file (string): Path to the csv file with annotations.
@@ -31,6 +31,7 @@ class RandomMaskDataset(Dataset):
         return len(self.base_dataset)
 
     def __getitem__(self, idx):
+        
         X, y = self.base_dataset[idx]
 
         mask          = torch.zeros(X.shape[1] * X.shape[2])
@@ -40,8 +41,6 @@ class RandomMaskDataset(Dataset):
         mask[choices] = 1
         mask          = mask.view(X.shape[1], X.shape[2])
         
-        if self.transform:
-            X = self.transform(X)
 
         return X, y, mask
 
@@ -69,7 +68,7 @@ class CustomCIFAR10DataModule(LightningDataModule):
         transform      = transforms.Compose([transforms.ToTensor()])
         cifar10_train  = CIFAR10(os.getcwd(), train=True,  download=False, transform=self.transform_train)
         cifar10_test   = CIFAR10(os.getcwd(), train=False, download=False, transform=self.transform_test)
-        custom_cifar10_train = RandomMaskDataset(cifar10_train, 10, transform = self.transform_train)
+        custom_cifar10_train = RandomMaskDataset(cifar10_train, 10)
 
         self.train_dataset, self.val_dataset = random_split(custom_cifar10_train, [40000, 10000])
         self.test_dataset = cifar10_test
@@ -90,6 +89,7 @@ class CustomCIFAR10DataModule(LightningDataModule):
         sample_dl = DataLoader(sample_ds, sampler=sample_sampler, batch_size=1)
 
         return sample_dl
+
 
 if __name__ == '__main__':
     CIFAR10_dm = CustomCIFAR10DataModule()
