@@ -144,7 +144,6 @@ class Sampler_Classifer_Network(LightningModule):
             loss            += F.cross_entropy(classifier_pred, classifier_y)
         
 
-        classifier_pred = self.classifier(classifier_X)
         predictions = torch.max(classifier_pred, 1)[1]
         loss            += F.cross_entropy(classifier_pred, classifier_y)
         correct     = (predictions == classifier_y).sum()
@@ -207,7 +206,6 @@ class Sampler_Classifer_Network(LightningModule):
             filter_out_image = torch.unsqueeze(sampler_pred, 1)  * test
             outputs          = self.classifier(filter_out_image)
         
-        outputs = self.classifier(X)
         predictions = torch.max(outputs, 1)[1]
         correct     = (predictions == y).sum()
         validation_accuracy    = correct / X.size()[0]
