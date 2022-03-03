@@ -1,3 +1,7 @@
+## LR Finder -- Done, Changing the Optimizer -- In progress, DeepSpeed 
+## Integrate augmentations before input to sampler
+## Save hyperparameters
+## Profiler -- Done
 import os, argparse, random
 import torch
 import matplotlib.pyplot as plt
@@ -24,7 +28,6 @@ labels_map = {
     8: "ship",
     9: "truck",
 }
-
 class FilterOutMask(nn.Module):
     """Implemeted using conv layers"""
     def __init__(self, k):
@@ -110,15 +113,14 @@ class ClassifierNetwork(nn.Module):
         super(ClassifierNetwork, self).__init__()
         
         self.model_final = models.resnet18(pretrained=True)
-        num_input_fc = self.model_final.fc.in_features
-        self.model_final.fc = nn.Linear(num_input_fc, 10)
-        '''
-        self.model_final = torchvision.models.resnet18(pretrained=True, num_classes=10)
+        
         self.model_final.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)
         self.model_final.maxpool = nn.Identity()
-        '''
+        self.model_final.fc = nn.Linear(self.model_final.fc.in_features, 10)
+
     def forward(self, x):
         out = self.model_final(x)
+        out = torch.nn.functional.log_softmax(out, dim=1)
         return out
 
 class Sampler_Classifer_Network(LightningModule):
@@ -131,46 +133,14 @@ class Sampler_Classifer_Network(LightningModule):
         self.mask_per         = mask_per
         self.save_path        = save_path
         self.automatic_optimization = False
-        self.learning_rate = 1e-5
+        self.learning_rate = 1e-3
 
         wandb.init("Sampler_classifier")
         wandb.watch(self.classifier, log = "all")
         wandb.watch(self.sampler, log = "all")
         self.save_hyperparameters()
 
-    def visualize_and_save(self, filename):
-        visualizer_dataloader = self.trainer.datamodule.visualizer_dataloader()
-        sample_no        = 0
-        figure           = plt.figure(figsize=(8, 8))
-        rows, cols       = len(visualizer_dataloader), self.loop_parameter+1
-        device = torch.device('cuda:0')
-        with torch.no_grad():
-          for X, y, mask in visualizer_dataloader:
-            X = X.to(device)
-            y = y.to(device)
-            mask = mask.to(device)
-            figure.add_subplot(rows,cols, sample_no * cols + 1)
-            plt.axis("off")
-            plt.imshow(X.cpu().squeeze().permute(1, 2, 0), cmap="BrBG")
-
-            test         = X.view(-1, 3, 32, 32)
-            test         = test
-            sampler_pred = mask
-
-            for itr in range(0, self.loop_parameter):
-              sampler_pred     = torch.unsqueeze(sampler_pred, 1)  * test
-              sampler_pred     = self.sampler(sampler_pred)
-              filter_out_image = torch.unsqueeze(sampler_pred, 1)  * test
-              outputs          = self.classifier(filter_out_image)
-              predictions      = torch.max(outputs, 1)[1]
-
-              figure.add_subplot(rows,cols, sample_no * cols + itr + 2)
-              plt.title(str(labels_map[int(predictions.detach().cpu().numpy().squeeze())]))
-              plt.axis("off")
-              plt.imshow(sampler_pred.detach().cpu().squeeze())
-
-            sample_no += 1
-        plt.savefig(os.path.join(self.save_path, filename))
+    
 
     def training_step(self, batch, batch_idx):
         data_X, data_y   = batch[0], batch[1]
@@ -182,7 +152,7 @@ class Sampler_Classifer_Network(LightningModule):
         sampler_train    = False
 
         if batch_idx >= int(self.classifier_start * self.trainer.num_training_batches):
-            classifier_train = True
+           classifier_train = True
         else:
             sampler_train    = True
 
@@ -190,15 +160,18 @@ class Sampler_Classifer_Network(LightningModule):
         schedulers = self.lr_schedulers()
         sampler_optimizer, classifier_optimizer = optimizers[0], optimizers[1]
         sampler_scheduler, classifier_scheduler = schedulers[0], schedulers[1]
-
+        #classifier_optimizer = self.optimizers()
+        #classifier_scheduler = self.lr_schedulers()
         for _ in range(0, self.loop_parameter):
             sampler_pred     = torch.unsqueeze(sampler_pred, 1) * classifier_X
             sampler_pred     = self.sampler(sampler_pred)
             filter_out_image = torch.unsqueeze(sampler_pred, 1) * classifier_X
             classifier_pred  = self.classifier(filter_out_image)
             loss            += F.cross_entropy(classifier_pred, classifier_y)
+        
 
         predictions = torch.max(classifier_pred, 1)[1]
+        loss            += F.cross_entropy(classifier_pred, classifier_y)
         correct     = (predictions == classifier_y).sum()
         accuracy    = correct / classifier_X.size()[0]
 
@@ -223,12 +196,30 @@ class Sampler_Classifer_Network(LightningModule):
         wandb.log({"Accuracy": training_accuracy, "Epoch": self.trainer.current_epoch})
 
     def configure_optimizers(self):
-        sampler_optimizer    = torch.optim.Adam(self.sampler.parameters(), lr=1e-3)
-        classifier_optimizer = torch.optim.Adam(self.classifier.parameters(), lr=self.learning_rate)
-        sampler_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(sampler_optimizer, self.trainer.max_epochs, 0, verbose=True)
-        classifier_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(classifier_optimizer, self.trainer.max_epochs, 0, verbose=True)
+        sampler_optimizer    = torch.optim.SGD(self.sampler.parameters(), lr=1e-3, momentum=0.9)
+        #classifier_optimizer = torch.optim.Adam(self.classifier.parameters(), lr=self.learning_rate)
+        classifier_optimizer = torch.optim.SGD(
+            self.classifier.parameters(),
+            lr=0.05,
+            momentum=0.9,
+            weight_decay=5e-4,
+        )
+        classifier_scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                                classifier_optimizer,
+                                0.1,
+                                epochs=self.trainer.max_epochs,
+                                steps_per_epoch=782)
+        sampler_scheduler = torch.optim.lr_scheduler.OneCycleLR(
+                                sampler_optimizer,
+                                0.1,
+                                epochs=self.trainer.max_epochs,
+                                steps_per_epoch=782)
+        
+        #sampler_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(sampler_optimizer, self.trainer.max_epochs, 0)
+        #classifier_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(classifier_optimizer, self.trainer.max_epochs)
                         
         return [sampler_optimizer, classifier_optimizer], [sampler_scheduler, classifier_scheduler]
+        #return [classifier_optimizer], [classifier_scheduler]
 
     def validation_step(self, batch, batch_idx):
         X, y = batch[0], batch[1]
@@ -240,7 +231,7 @@ class Sampler_Classifer_Network(LightningModule):
             sampler_pred     = self.sampler(sampler_pred)
             filter_out_image = torch.unsqueeze(sampler_pred, 1)  * test
             outputs          = self.classifier(filter_out_image)
-
+        
         predictions = torch.max(outputs, 1)[1]
         correct     = (predictions == y).sum()
         validation_accuracy    = correct / X.size()[0]
@@ -252,12 +243,13 @@ class Sampler_Classifer_Network(LightningModule):
         avg_validation_acc = torch.stack([x for x in validation_step_outputs]).mean()
         self.log("Validation_accuracy", avg_validation_acc, on_epoch=True, logger=True)
         wandb.log({"Validation epoch end accuracy": avg_validation_acc})
-        self.visualize_and_save('train_epoch_'+str(self.trainer.current_epoch)+'.png')
+        #self.visualize_and_save('train_epoch_'+str(self.trainer.current_epoch)+'.png')
 
     def test_step(self, batch, batch_idx):
         return None
 
 if __name__ == '__main__':
+
     parser = argparse.ArgumentParser(description='Hyperparam initializer')
     parser.add_argument('-m', type=float, dest='mask_ratio', default=1.0,
                         help = 'mask ratio')
@@ -288,17 +280,13 @@ if __name__ == '__main__':
     loop_parameter   = args.loop_param
     classifier_start = 0.25
 
-    CIFAR10_dm = CustomCIFAR10DataModule()
+    CIFAR10_dm = CustomCIFAR10DataModule(int(mask_per*1024))
     CIFAR10_dm.prepare_data()
     CIFAR10_dm.setup()
 
     sampler_model    = SamplerNetwork(int(mask_per*1024))
     classifier_model = ClassifierNetwork()
     main_model       = Sampler_Classifer_Network(sampler_model, classifier_model, loop_parameter, classifier_start, mask_per, save_path)
-    trainer          = Trainer(gpus=1, max_epochs=epochs, profiler='simple', auto_lr_find=True)
-
-
-
-
+    trainer          = Trainer(gpus=1, accelerator="gpu", max_epochs=args.epochs, profiler='simple')
     trainer.fit(main_model, CIFAR10_dm)
 
