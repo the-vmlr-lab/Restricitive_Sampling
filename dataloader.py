@@ -79,8 +79,8 @@ class RandomMaskDataset(Dataset):
 class CustomCIFAR10DataModule(LightningDataModule):
     def __init__(self, mask_pixels, batch_size=64):
         super().__init__()
-        self.mask_pixels=mask_pixels
-        self.batch_size = batch_size
+        self.mask_pixels     = mask_pixels
+        self.batch_size      = batch_size
         self.transform_train =  transforms.Compose([
                                 transforms.RandomCrop(32, padding=4),
                                 transforms.RandomHorizontalFlip(),
@@ -88,23 +88,23 @@ class CustomCIFAR10DataModule(LightningDataModule):
                                 transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
                                 ])
 
+        self.transform_test  = transforms.Compose([
+                                  transforms.ToTensor(),
+                                  transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
+                                  ])
+
+    def prepare_data(self):
+        CIFAR10(os.getcwd(), train = True,  download = True, transform = self.transform_train)
+        CIFAR10(os.getcwd(), train = False, download = True, transform = self.transform_test)
+
         self.transform_test   = transforms.Compose([
                                   transforms.ToTensor(),
                                   transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
                                   ])
 
     def prepare_data(self):
-        CIFAR10(os.getcwd(), train=True,  download=True, transform=self.transform_train)
-        CIFAR10(os.getcwd(), train=False, download=True, transform=self.transform_test)
-
-        self.transform_test   = transforms.Compose([
-                                  transforms.ToTensor(),
-                                  transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),
-                                  ])
-
-    def prepare_data(self):
-        CIFAR10(os.getcwd(), train=True,  download=True, transform=self.transform_train)
-        CIFAR10(os.getcwd(), train=False, download=True, transform=self.transform_test)
+        CIFAR10(os.getcwd(), train = True,  download = True, transform = self.transform_train)
+        CIFAR10(os.getcwd(), train = False, download = True, transform = self.transform_test)
 
     def setup(self):
         transform      = transforms.Compose([transforms.ToTensor()])
@@ -126,9 +126,9 @@ class CustomCIFAR10DataModule(LightningDataModule):
 
     def visualizer_dataloader(self):
         num_train_samples = 5
-        sample_ds = Subset(self.train_dataset, np.arange(num_train_samples))
-        sample_sampler = RandomSampler(sample_ds)
-        sample_dl = DataLoader(sample_ds, sampler=sample_sampler, batch_size=1)
+        sample_ds         = Subset(self.train_dataset, np.arange(num_train_samples))
+        sample_sampler    = RandomSampler(sample_ds)
+        sample_dl         = DataLoader(sample_ds, sampler=sample_sampler, batch_size=1)
 
         return sample_dl
 
