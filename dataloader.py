@@ -25,7 +25,7 @@ class RandomMaskDataset(Dataset):
                 on a sample.
         """
         self.base_dataset = dataset
-        self.mask_pixels  = mask_pixels
+        self.mask_pixels  = int(mask_pixels)
 
     def __len__(self):
         return len(self.base_dataset)
