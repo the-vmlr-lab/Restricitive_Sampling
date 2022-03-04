@@ -14,50 +14,11 @@ warnings.filterwarnings("ignore")
 
 
 class RandomMaskDataset(Dataset):
-    """Face Landmarks dataset."""
 
     def __init__(self, dataset, mask_pixels):
-        """
-        Args:
-            csv_file (string): Path to the csv file with annotations.
-            root_dir (string): Directory with all the images.
-            transform (callable, optional): Optional transform to be applied
-                on a sample.
-        """
+
         self.base_dataset = dataset
         self.mask_pixels  = int(mask_pixels)
-
-    def __len__(self):
-        return len(self.base_dataset)
-
-    def __getitem__(self, idx):
-        
-        X, y = self.base_dataset[idx]
-
-        mask          = torch.zeros(X.shape[1] * X.shape[2])
-        choice_list   = [i for i in range(len(mask))]
-        choices       = random.choices(choice_list, k = self.mask_pixels)
-
-        mask[choices] = 1
-        mask          = mask.view(X.shape[1], X.shape[2])
-        
-
-        return X, y, mask
-
-
-class RandomMaskDataset(Dataset):
-    """Face Landmarks dataset."""
-
-    def __init__(self, dataset, mask_pixels):
-        """
-        Args:
-            csv_file (string): Path to the csv file with annotations.
-            root_dir (string): Directory with all the images.
-            transform (callable, optional): Optional transform to be applied
-                on a sample.
-        """
-        self.base_dataset = dataset
-        self.mask_pixels  = mask_pixels
 
     def __len__(self):
         return len(self.base_dataset)

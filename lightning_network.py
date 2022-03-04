@@ -172,10 +172,18 @@ class Sampler_Classifer_Network(LightningModule):
             sample_no += 1
         plt.savefig(os.path.join(self.save_path, filename))
 
+    def mask_union(self, pred_list):
+        final_pred = pred_list[0]
+        for i in range(1, len(pred_list)):
+            final_pred = final_pred.logical_or(pred_list[0])
+
+        return final_pred
+
     def training_step(self, batch, batch_idx):
         data_X, data_y   = batch[0], batch[1]
         sampler_pred     = batch[2]
-        classifier_X     = data_X.view(-1,3, 32, 32)
+        sampler_prd_list = []
+        classifier_X     = data_X.view(-1, 3, 32, 32)
         classifier_y     = data_y
         loss             = 0
         classifier_train = False
@@ -194,6 +202,8 @@ class Sampler_Classifer_Network(LightningModule):
         for _ in range(0, self.loop_parameter):
             sampler_pred     = torch.unsqueeze(sampler_pred, 1) * classifier_X
             sampler_pred     = self.sampler(sampler_pred)
+            sampler_prd_list.append(sampler_pred)
+            sampler_pred     = self.mask_union(sampler_prd_list) 
             filter_out_image = torch.unsqueeze(sampler_pred, 1) * classifier_X
             classifier_pred  = self.classifier(filter_out_image)
             loss            += F.cross_entropy(classifier_pred, classifier_y)
