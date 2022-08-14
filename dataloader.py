@@ -67,7 +67,7 @@ class CustomCIFAR10DataModule(LightningDataModule):
         CIFAR10(os.getcwd(), train = True,  download = True, transform = self.transform_train)
         CIFAR10(os.getcwd(), train = False, download = True, transform = self.transform_test)
 
-    def setup(self):
+    def setup(self,stage=None):
         transform      = transforms.Compose([transforms.ToTensor()])
         cifar10_train  = CIFAR10(os.getcwd(), train=True,  download=False, transform=self.transform_train)
         cifar10_test   = CIFAR10(os.getcwd(), train=False, download=False, transform=self.transform_test)
