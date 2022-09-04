@@ -336,7 +336,7 @@ class Sampler_Classifer_Network_LSTM(LightningModule):
         visualizer_dataloader = self.trainer.datamodule.visualizer_dataloader()
         sample_no        = 0
         figure           = plt.figure(figsize=(8, 8))
-        rows, cols       = len(visualizer_dataloader), self.loop_parameter+1
+        rows, cols       = len(visualizer_dataloader), self.loop_parameter+2
         device = torch.device('cuda:0')
         with torch.no_grad():
           for X, y, mask in visualizer_dataloader:
@@ -346,19 +346,23 @@ class Sampler_Classifer_Network_LSTM(LightningModule):
             figure.add_subplot(rows,cols, sample_no * cols + 1)
             plt.axis("off")
             plt.imshow(X.cpu().squeeze().permute(1, 2, 0), cmap="BrBG")
+            figure.add_subplot(rows,cols, sample_no * cols + 2)
+            plt.axis("off")
+            plt.imshow(mask.detach().cpu().squeeze(), cmap="gray")
 
             test         = X.view(-1, 3, 32, 32)
             test         = test
             sampler_pred = mask
-
+            hx = torch.randn(test.shape[0], self.sampler.latent_dim).cuda() # (batch, hidden_size)
+            cx = torch.randn(test.shape[0], self.sampler.latent_dim).cuda()
             for itr in range(0, self.loop_parameter):
               sampler_pred     = torch.unsqueeze(sampler_pred, 1)  * test
-              sampler_pred     = self.sampler(sampler_pred)
+              sampler_pred,hx,cx     = self.sampler(sampler_pred,hx,cx)
               filter_out_image = torch.unsqueeze(sampler_pred, 1)  * test
               outputs          = self.classifier(filter_out_image)
-              predictions      = torch.max(outputs, 1)[1]
 
-              figure.add_subplot(rows,cols, sample_no * cols + itr + 2)
+              predictions = torch.max(outputs, 1)[1]
+              figure.add_subplot(rows,cols, sample_no * cols + itr + 3)
               plt.title(str(labels_map[int(predictions.detach().cpu().numpy().squeeze())]))
               plt.axis("off")
               plt.imshow(sampler_pred.detach().cpu().squeeze())
@@ -416,14 +420,17 @@ class Sampler_Classifer_Network_LSTM(LightningModule):
             classifier_optimizer.step()
             classifier_scheduler.step()
 
-        return {"Accuracy":accuracy, "Loss":loss}
+        return {"Accuracy":accuracy, "Loss":loss, "LR": torch.tensor(classifier_scheduler.get_last_lr()), "LR2": torch.tensor(sampler_scheduler.get_last_lr())}
 
     def training_epoch_end(self, training_step_outputs):
         training_loss = torch.stack([x["Loss"] for x in training_step_outputs]).mean()
         training_accuracy = torch.stack([x["Accuracy"] for x in training_step_outputs]).mean()
-
+        training_lr = torch.stack([x["LR"] for x in training_step_outputs]).mean()
+        training_lr2 = torch.stack([x["LR2"] for x in training_step_outputs]).mean()
         wandb.log({"Training Loss": training_loss, "Epoch": self.trainer.current_epoch})
         wandb.log({"Accuracy": training_accuracy, "Epoch": self.trainer.current_epoch})
+        wandb.log({"LR": training_lr, "Epoch": self.trainer.current_epoch})
+        wandb.log({"LR2": training_lr, "Epoch": self.trainer.current_epoch})
 
     def configure_optimizers(self):
         sampler_optimizer    = torch.optim.Adam(self.sampler.parameters(), lr=1e-3)
@@ -469,7 +476,7 @@ class Sampler_Classifer_Network_LSTM(LightningModule):
         avg_validation_acc = torch.stack([x for x in validation_step_outputs]).mean()
         self.log("Validation_accuracy", avg_validation_acc, on_epoch=True, logger=True)
         wandb.log({"Validation epoch end accuracy": avg_validation_acc})
-        #self.visualize_and_save('train_epoch_'+str(self.trainer.current_epoch)+'.png')
+        self.visualize_and_save('train_epoch_'+str(self.trainer.current_epoch)+'.png')
 
     def test_step(self, batch, batch_idx):
         return None
@@ -511,10 +518,10 @@ if __name__ == '__main__':
 
     sampler_model    = SamplerNetwork(int(mask_per*1024),base_channel_size=32, latent_dim=384)
     classifier_model = ClassifierNetwork()
-    main_model       = Sampler_Classifer_Network_Pretrain(sampler_model, classifier_model, loop_parameter, classifier_start, mask_per, save_path)
-    trainer          = Trainer(gpus=1, accelerator="gpu", max_epochs=40, profiler='simple')
-    trainer.fit(main_model, CIFAR10_dm)
+    #main_model       = Sampler_Classifer_Network_Pretrain(sampler_model, classifier_model, loop_parameter, classifier_start, mask_per, save_path)
+    #trainer          = Trainer(gpus=1, accelerator="gpu", max_epochs=40, profiler='simple')
+    #trainer.fit(main_model, CIFAR10_dm)
     main_model       = Sampler_Classifer_Network_LSTM(sampler_model, classifier_model, loop_parameter, classifier_start, mask_per, save_path)
-    trainer          = Trainer(gpus=1, accelerator="gpu", max_epochs=40, profiler='simple')
+    trainer          = Trainer(gpus=1, accelerator="gpu", max_epochs=100, profiler='simple')
     trainer.fit(main_model, CIFAR10_dm)
 
