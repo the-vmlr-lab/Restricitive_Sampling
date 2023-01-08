@@ -11,7 +11,72 @@ import torch.nn.functional as F
 from dataloader import CustomCIFAR10DataModule
 
 import wandb
+class SamplerNetwork2(nn.Module):
+    def __init__(self,k,gpu=True):
+        super(SamplerNetwork2, self).__init__()
+        self.conv_1 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=3,
+                out_channels=32,
+                kernel_size=3,
+                padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.MaxPool2d(kernel_size=2, stride=2)
+        )
 
+        self.conv_2 = nn.Sequential(
+            nn.Conv2d(
+                in_channels=32,
+                out_channels=64,
+                kernel_size=3,
+
+                padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.MaxPool2d(2)
+        )
+
+
+        self.deconv_1 = nn.Sequential(
+            nn.ConvTranspose2d(
+              in_channels=64,
+              out_channels=32,
+              kernel_size=3,
+              stride=2,
+              padding=1,
+              output_padding=1),
+            nn.BatchNorm2d(32),
+            nn.ReLU()
+        )
+
+        self.deconv_2 = nn.Sequential(
+            nn.ConvTranspose2d(
+                in_channels=32,
+                out_channels=1,
+                kernel_size = 3,
+                stride=2,
+                padding=1, 
+                output_padding=1),
+          
+        )
+
+        self.drop = nn.Dropout2d(0.25)
+        print(gpu)
+        self.filter=FilterOutMask(k)
+
+    def forward(self, x,y):
+        input_shape=x.shape
+        out = self.conv_1(x) 
+        out = self.conv_2(out)
+        out = self.deconv_1(out)
+        out = self.deconv_2(out)
+        print("here now")
+        print(out.shape)
+        out=torch.sigmoid(out)
+        #out = self.filter(out,y)
+        
+        return out*y
 labels_map = {
     0: "airplane",
     1: "automobile",
@@ -26,21 +91,31 @@ labels_map = {
 }
 
 class FilterOutMask(nn.Module):
-    """Implemeted using conv layers"""
-    def __init__(self, k):
-
+    def __init__(self, sparsity):
         super(FilterOutMask, self).__init__()
-        self.k   = k
+        self.sparsity = sparsity
 
-    def forward(self, output_a):
-        output_flat = torch.flatten(output_a, start_dim=1)
-        top_k, top_k_indices = torch.topk(output_flat, self.k, 1)
-        mask = torch.zeros(output_flat.shape)
-        mask = mask.type_as(output_a)
-        src  = torch.ones(top_k_indices.shape)
-        src  = src.type_as(output_a)
-        mask = mask.scatter(1, top_k_indices, src)
-        return mask
+    def forward(self, x,y):
+        img_shape = list(x.shape)
+        print('Batch Shape', img_shape)
+        x_flat = x.view(x.shape[0], -1)
+        print('X Flat Shape', x_flat.shape)
+        k_idx = int(self.sparsity * x_flat.shape[1])
+        print('Kth index', k_idx)
+        #threshold = (torch.sort(x_flat, dim=1)[0])[k_idx]
+        threshold = torch.sort(x_flat, dim=1)[0][:, k_idx-1]
+        print('Threshold', threshold)
+        masks = torch.Tensor([])
+        masks.requires_grad = True
+        for i in range(img_shape[0]):
+            mask = (x_flat[i] < threshold[i]).reshape(1, 1, 32, 32)
+            masks = torch.cat([masks, mask], 0)
+        print(masks.shape)
+        masks=masks.view(img_shape)
+        print(masks.shape)
+        print("here")
+        print(y.shape)
+        return masks.float()*y
 
 class Encoder(nn.Module):
 
@@ -105,7 +180,7 @@ class Decoder(nn.Module):
             nn.Conv2d(c_hid, c_hid, kernel_size=3, padding=1),
             act_fn(),
             nn.ConvTranspose2d(c_hid, 1, kernel_size=3, output_padding=1, padding=1, stride=2), # 16x16 => 32x32
-            nn.Tanh() # The input images is scaled between -1 and 1, hence the output has to be bounded as well
+             # The input images is scaled between -1 and 1, hence the output has to be bounded as well
         )
 
     def forward(self, x):
@@ -137,7 +212,8 @@ class SamplerNetwork(nn.Module):
         
         h_new,c_new=self.rnn(z, (h, c))
         x_hat = self.decoder(h_new)
-        out = self.filter(x_hat)
+        out = torch.sigmoid(x_hat)
+        
         out = out.view(-1, input_shape[2], input_shape[3])
         return out,h_new,c_new
 class ClassifierNetwork(nn.Module):

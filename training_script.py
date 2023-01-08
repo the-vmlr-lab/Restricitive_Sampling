@@ -59,6 +59,8 @@ if __name__ == '__main__':
     print("classifier_training_done")
     main_model       = Sampler_Classifer_Network_LSTM(sampler_model, classifier_model, loop_parameter, classifier_start, mask_per, save_path)
     print('model init')
+    for name, param in sampler_model.named_parameters():
+                print(param.requires_grad)
     trainer          = Trainer(gpus=1, accelerator="gpu",max_epochs=40)
     print("hello")
     trainer.fit(main_model, CIFAR10_dm)

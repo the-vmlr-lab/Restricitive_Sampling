@@ -14,6 +14,6 @@
 echo "Run the python"
 echo $PWD
 
-python training_script.py  -m 0.05 -lp 5 -save_folder=“results” -model_name=‘base2-m0.05-lp5’ -epochs=100
+python training_script.py  -m 1 -lp 5 -save_folder=“results” -model_name=‘base2-m1-lp5’ -epochs=100
 
 

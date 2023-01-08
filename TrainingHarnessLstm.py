@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from models.Sampler_LSTM import SamplerNetwork
 from models.Sampler_LSTM import ClassifierNetwork
 from dataloader import CustomCIFAR10DataModule
-
+import sys
 import wandb
 labels_map = {
     0: "airplane",
@@ -76,7 +76,7 @@ class Sampler_Classifer_Network_LSTM(LightningModule):
               figure.add_subplot(rows,cols, sample_no * cols + itr + 3)
               plt.title(str(labels_map[int(predictions.detach().cpu().numpy().squeeze())]))
               plt.axis("off")
-              plt.imshow(sampler_pred.detach().cpu().squeeze())
+              plt.imshow(sampler_pred.detach().cpu().squeeze()) #add min and max
 
             sample_no += 1
         plt.savefig(os.path.join(self.save_path, filename))
@@ -92,12 +92,11 @@ class Sampler_Classifer_Network_LSTM(LightningModule):
         loss             = 0
         classifier_train = False
         sampler_train    = False
-
         if batch_idx >= int(self.classifier_start * self.trainer.num_training_batches):
             classifier_train = True
         else:
             sampler_train    = True
-
+        
         optimizers = self.optimizers()
         schedulers = self.lr_schedulers()
         sampler_optimizer, classifier_optimizer = optimizers[0], optimizers[1]
@@ -117,7 +116,7 @@ class Sampler_Classifer_Network_LSTM(LightningModule):
 
         if sampler_train:
             sampler_optimizer.zero_grad()
-            self.manual_backward(loss)
+            self.manual_backward(loss)      
             sampler_optimizer.step()
             #sampler_scheduler.step()
         elif classifier_train:
