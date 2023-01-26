@@ -6,7 +6,6 @@ import os
 import random
 import tqdm
 import matplotlib.pyplot as plt
-import wandb
 
 ## Torch imports
 import torch
@@ -20,7 +19,6 @@ from torchvision.datasets import CIFAR10
 import torchvision
 
 ## Necessary File imports
-from harnesses.CombinationHarness import CNNHarness
 from networks.classificationNetworks import CNNClassifierNetwork
 from networks.samplerNetworks import CNNSamplerNetwork
 from data_related_content.data_stuff import MaskedDataset
@@ -28,10 +26,9 @@ from data_related_content.data_stuff import MaskedDataset
 
 class TrainingHarness:
     def __init__(self, training_params):
-
-        self.classifier = training_params["classifier"]
-        self.sampler = training_params["sampler"]
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.classifier = training_params["classifier"].to(self.device)
+        self.sampler = training_params["sampler"].to(self.device)
         self.loops = training_params["loops"]
 
         self.classifier_optimizer = Adam(self.classifier.backbone.parameters(), lr=0.05)
@@ -110,6 +107,36 @@ class TrainingHarness:
         x = self.classifier(x)
         return x
 
+    def train_only_classifier(self):
+        self.classifier.train()
+        train_loss = 0.0
+        train_correct = 0
+        total = 0
+        for data in tqdm.tqdm(self.train_dl):
+            ims, labels, mask = data
+            ims, labels, mask = (
+                ims.to(self.device),
+                labels.to(self.device),
+                mask.to(self.device),
+            )
+
+            self.classifier_optimizer.zero_grad()
+            classifier_out = self.forward_with_classifier(ims)
+            loss = self.criterion(classifier_out, labels)
+
+            loss.backward()
+
+            self.classifier_optimizer.step()
+            train_loss += loss.item()
+            _, pred = torch.max(classifier_out, 1)
+            train_correct += pred.eq(labels).sum().item()
+            total += labels.size(0)
+
+        train_loss /= len(self.train_dl)
+        train_acc = (train_correct / total) * 100
+
+        return train_loss, train_acc
+
     def train_both(self):
         self.classifier.train()
         self.sampler.train()
@@ -147,46 +174,10 @@ class TrainingHarness:
 
         return train_loss, train_acc
 
-    def train_only_X(self):
-        self.classifier.train()
-        self.sampler.train()
-        train_loss = 0.0
-        train_correct = 0
-        total = 0
-        for data in tqdm.tqdm(self.train_dl):
-            ims, labels, mask = data
-            ims, labels, mask = (
-                ims.to(self.device),
-                labels.to(self.device),
-                mask.to(self.device),
-            )
-
-            self.classifier_optimizer.zero_grad()
-            self.sampler_optimizer.zero_grad()
-            ## Input image mit random mask -> Sampler -> x_sampled (looped N times)
-            sampler_out = self.forward_with_sampler(ims, og_mask=mask)
-
-            ## x_sampled -> classifier -> predictions
-            classifier_out = self.forward_with_classifier(sampler_out)
-            loss = self.criterion(classifier_out, labels)
-
-            loss.backward()
-
-            self.classifier_optimizer.step()
-            self.sampler_optimizer.step()
-            train_loss += loss.item()
-            _, pred = torch.max(classifier_out, 1)
-            train_correct += pred.eq(labels).sum().item()
-            total += labels.size(0)
-
-        train_loss /= len(self.train_dl)
-        train_acc = (train_correct / total) * 100
-
-        return train_loss, train_acc
-
-    def test_model(self):
-        self.sampler.eval()
-        self.classifier.eval()
+    def test_model(self, both=False):
+        if both:
+            self.sampler.eval()
+            self.classifier.eval()
         test_loss = 0.0
         test_correct = 0
         test_total = 0
@@ -194,9 +185,11 @@ class TrainingHarness:
             for data in self.test_dl:
                 ims, labels = data
                 ims, labels = ims.to(self.device), labels.to(self.device)
-
-                sampler_out = self.forward_with_sampler(ims)
-                classifier_out = self.forward_with_classifier(sampler_out)
+                if both:
+                    sampler_out = self.forward_with_sampler(ims)
+                    classifier_out = self.forward_with_classifier(sampler_out)
+                else:
+                    classifier_out = self.forward_with_classifier(ims)
 
                 loss = self.criterion(classifier_out, labels)
                 _, pred = torch.max(classifier_out, 1)
@@ -290,9 +283,12 @@ def train_experiment(sparsity_mask):
             training_run.sampler.state_dict(),
             f"./{ckpt_path}/samplermodel_{epoch}.pt",
         )
-
-        train_loss, train_acc = training_run.train_both()
-        test_loss, test_acc = training_run.test_model()
+        if epoch < 10:
+            train_loss, train_acc = training_run.train_only_classifier()
+            test_loss, test_acc = training_run.test_model(both=False)
+        else:
+            train_loss, train_acc = training_run.train_both()
+            test_loss, test_acc = training_run.test_model(both=True)
         print(
             f"Train Loss: {train_loss}, Train Acc: {train_acc}, Test Loss: {test_loss}, Test Acc: {test_acc}"
         )
