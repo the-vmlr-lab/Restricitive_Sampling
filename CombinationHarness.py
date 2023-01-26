@@ -1,9 +1,7 @@
 import torch.nn as nn
-import torch.nn.functional as F
 import torch
 import torchvision
 import matplotlib.pyplot as plt
-import numpy as np
 
 
 class CNNHarness(nn.Module):

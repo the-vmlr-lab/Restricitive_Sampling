@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -51,6 +52,6 @@ class CNNSamplerNetwork(nn.Module):
         x = self.conv_block2(x)
         x = self.deconv_block1(x)
         x = self.deconv_block2(x)
-        out = F.sigmoid(x)
+        out = torch.sigmoid(x)
 
         return out
