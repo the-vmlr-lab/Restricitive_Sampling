@@ -6,6 +6,7 @@ import os
 import random
 import tqdm
 import matplotlib.pyplot as plt
+import wandb
 
 ## Torch imports
 import torch
@@ -22,6 +23,8 @@ import torchvision
 from networks.classificationNetworks import CNNClassifierNetwork
 from networks.samplerNetworks import CNNSamplerNetwork
 from data_related_content.data_stuff import MaskedDataset
+
+wandb.init(project="Restrictive_Sampling_Rewrite")
 
 
 class TrainingHarness:
@@ -227,7 +230,7 @@ test_transform = transforms.Compose(
 def train_experiment(sparsity_mask):
 
     train_params = {}
-    train_params["epochs"] = 20
+    train_params["epochs"] = 50
     train_params["batch_size"] = 256
     train_params["is_deterministic"] = False
     train_params["classifier"] = CNNClassifierNetwork()
@@ -235,7 +238,7 @@ def train_experiment(sparsity_mask):
     train_params["classifier_lr"] = 0.05
     train_params["sampler_lr"] = 0.05
     train_params["mask_sparsity"] = sparsity_mask
-    train_params["loops"] = 3
+    train_params["loops"] = 4
 
     # set_seed(experiment_seed, is_deterministic=train_params["is_deterministic"])
 
@@ -291,25 +294,26 @@ def train_experiment(sparsity_mask):
             training_run.sampler.state_dict(),
             f"./{ckpt_path}/samplermodel_{epoch}.pt",
         )
-        if epoch < 5:
+        if epoch < 10:
             train_loss, train_acc = training_run.train_only_classifier()
             test_loss, test_acc = training_run.test_model(both=False)
         else:
+            print("Now training both Sampler and Classifier!")
             train_loss, train_acc = training_run.train_both()
             test_loss, test_acc = training_run.test_model(both=True)
         print(
             f"Train Loss: {train_loss}, Train Acc: {train_acc}, Test Loss: {test_loss}, Test Acc: {test_acc}"
         )
-        """wandb.log(
+        wandb.log(
             {
                 "training_loss": train_loss,
                 "training_accuracy": train_acc,
                 "test_loss": test_loss,
                 "test_accuracy": test_acc,
-                "lr": training_run.scheduler.get_last_lr()[0],
+                # "lr": training_run.scheduler.get_last_lr()[0],
                 "epoch": epoch,
             }
-        )"""
+        )
 
 
 if __name__ == "__main__":
