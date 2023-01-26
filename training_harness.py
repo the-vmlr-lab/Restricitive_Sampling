@@ -183,10 +183,14 @@ class TrainingHarness:
         test_total = 0
         with torch.no_grad():
             for data in self.test_dl:
-                ims, labels = data
-                ims, labels = ims.to(self.device), labels.to(self.device)
+                ims, labels, masks = data
+                ims, labels, masks = (
+                    ims.to(self.device),
+                    labels.to(self.device),
+                    masks.to(self.device),
+                )
                 if both:
-                    sampler_out = self.forward_with_sampler(ims)
+                    sampler_out = self.forward_with_sampler(ims, og_mask=masks)
                     classifier_out = self.forward_with_classifier(sampler_out)
                 else:
                     classifier_out = self.forward_with_classifier(ims)
@@ -223,7 +227,7 @@ test_transform = transforms.Compose(
 def train_experiment(sparsity_mask):
 
     train_params = {}
-    train_params["epochs"] = 2
+    train_params["epochs"] = 20
     train_params["batch_size"] = 256
     train_params["is_deterministic"] = False
     train_params["classifier"] = CNNClassifierNetwork()
@@ -231,7 +235,7 @@ def train_experiment(sparsity_mask):
     train_params["classifier_lr"] = 0.05
     train_params["sampler_lr"] = 0.05
     train_params["mask_sparsity"] = sparsity_mask
-    train_params["loops"] = 5
+    train_params["loops"] = 3
 
     # set_seed(experiment_seed, is_deterministic=train_params["is_deterministic"])
 
@@ -243,9 +247,7 @@ def train_experiment(sparsity_mask):
     ckpt_path = f"{sparsity_mask}_checkpoints/"
 
     train_ds = CIFAR10(root="./data", train=True, download=True)
-    test_ds = CIFAR10(
-        root="./data", train=False, download=True, transform=test_transform
-    )
+    test_ds = CIFAR10(root="./data", train=False, download=True)
 
     training_dataset = MaskedDataset(
         train_ds,
@@ -253,16 +255,22 @@ def train_experiment(sparsity_mask):
         transforms=train_transform,
         im_size=(3, 32, 32),
     )
+    test_dataset = MaskedDataset(
+        test_ds,
+        train_params["mask_sparsity"],
+        transforms=test_transform,
+        im_size=(3, 32, 32),
+    )
 
     train_dl = DataLoader(
         training_dataset,
         batch_size=train_params["batch_size"],
-        shuffle=False,
+        shuffle=True,
         num_workers=2,
     )
 
     test_dl = DataLoader(
-        test_ds,
+        test_dataset,
         batch_size=train_params["batch_size"],
         shuffle=False,
         num_workers=2,
@@ -283,7 +291,7 @@ def train_experiment(sparsity_mask):
             training_run.sampler.state_dict(),
             f"./{ckpt_path}/samplermodel_{epoch}.pt",
         )
-        if epoch < 10:
+        if epoch < 5:
             train_loss, train_acc = training_run.train_only_classifier()
             test_loss, test_acc = training_run.test_model(both=False)
         else:
