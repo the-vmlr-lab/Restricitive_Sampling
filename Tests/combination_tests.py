@@ -1,22 +1,18 @@
-import os
 import sys
 
-here = os.path.dirname(__file__)
+sys.path.append("../")
 
-sys.path.append(os.path.join(here, ".."))
+from harnesses.CombinationHarness import CNNHarness
 
-from CombinationHarness import CNNHarness
+from networks.classificationNetworks import CNNClassifierNetwork
+from networks.samplerNetworks import CNNSamplerNetwork
 
-from classificationNetworks import CNNClassifierNetwork
-from samplerNetworks import CNNSamplerNetwork
-
-import torch
 from torch.utils.data import DataLoader
-from data_stuff import MaskedDataset
+from data_related_content.data_stuff import MaskedDataset
 from torchvision import transforms
 from torchvision.datasets import CIFAR10
 
-train_ds = CIFAR10("./data", train=True, download=True)
+train_ds = CIFAR10("../data", train=True, download=False)
 
 train_tf = transforms.Compose(
     [
@@ -41,7 +37,7 @@ test_run_1 = MaskedDataset(
     im_size=(3, 32, 32),
 )
 
-test_run_dl_1 = torch.utils.data.DataLoader(test_run_1, batch_size=batch_size)
+test_run_dl_1 = DataLoader(test_run_1, batch_size=batch_size)
 
 for data in test_run_dl_1:
     images, labels, masks = data

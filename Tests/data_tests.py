@@ -1,3 +1,7 @@
+import sys
+
+sys.path.append("../")
+
 from data_stuff import MaskedDataset
 from torchvision.datasets import CIFAR10
 from torchvision import transforms
@@ -7,6 +11,7 @@ import seaborn as sns
 import torch
 import numpy as np
 import einops
+
 
 train_ds = CIFAR10("./data", train=True, download=True)
 
