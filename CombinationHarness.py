@@ -13,36 +13,37 @@ class CNNHarness(nn.Module):
         self.sampler = sampler
         self.loops = loops
 
-        """
-        self.training_params = training_params
-        self.train_dl = self.training_params['train_dl']
-        self.test_dl = self.training_params['test_dl']
-        """
-
-    def save_mask_and_image(self, im_tensor, mask_tensor, loop_no):
-        mean = (
-            torch.tensor([0.4914, 0.4822, 0.4465]).view(1, 3, 1, 1).expand(8, 3, 32, 32)
+    def save_mask_and_image(self, im_tensor, mask_tensor, loop_no, show=False):
+        mean = (0.4914, 0.4822, 0.4465)
+        std = (0.2023, 0.1994, 0.2010)
+        denorm = torchvision.transforms.Normalize(
+            mean=[-m / s for m, s in zip(mean, std)],
+            std=[1.0 / s for s in std],
         )
-        std = (
-            torch.tensor([0.2023, 0.1994, 0.2010]).view(1, 3, 1, 1).expand(8, 3, 32, 32)
-        )
-
-        im_tensor = (im_tensor * std) + mean
-        im_tensor = torch.clamp(im_tensor, 0, 1)
+        im_tensor = denorm(im_tensor)
+        im_tensor = torch.clip(im_tensor, 0, 1)
+        mask_tensor = torch.clip(mask_tensor, 0, 1)
         im_and_mask = torch.cat((im_tensor, mask_tensor), dim=3)
         grid_image = torchvision.utils.make_grid(im_and_mask, nrow=8)
         grid_image = grid_image.numpy().transpose((1, 2, 0))
 
+        if show:
+            plt.imshow(grid_image)
+            plt.show()
         plt.title("Original images and masks")
         plt.legend(["Original Image", "Masked Image"])
-        plt.imsave(f"{loop_no}_ims.jpg", grid_image)
+        plt.imsave(f"{loop_no}_ims.png", grid_image)
 
     def loopdeedoodle(self, x):
         sampler_mask = self.sampler(x)
         return sampler_mask
 
     def forward_with_sampler(self, x, og_mask=None):
-        # save x here too maybe?
+        im_before_loop = x.clone()
+        mask_before_loop = og_mask
+        self.save_mask_and_image(
+            im_tensor=im_before_loop, mask_tensor=mask_before_loop, loop_no="init"
+        )
         # mask is what ya boi got from the dl (x, og_mask)
         for loopy_no in range(self.loops):
             prev_mask = torch.zeros(8, 3, 32, 32)

@@ -1,3 +1,10 @@
+import os
+import sys
+
+here = os.path.dirname(__file__)
+
+sys.path.append(os.path.join(here, ".."))
+
 from CombinationHarness import CNNHarness
 
 from classificationNetworks import CNNClassifierNetwork
@@ -25,7 +32,7 @@ batch_size = 8
 classifier_model = CNNClassifierNetwork()
 sampler_model = CNNSamplerNetwork()
 
-model = CNNHarness(classifier=classifier_model, sampler=sampler_model, loops=15)
+model = CNNHarness(classifier=classifier_model, sampler=sampler_model, loops=5)
 
 test_run_1 = MaskedDataset(
     train_ds,
