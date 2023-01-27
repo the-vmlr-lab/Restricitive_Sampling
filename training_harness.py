@@ -7,6 +7,8 @@ import random
 import tqdm
 import matplotlib.pyplot as plt
 import wandb
+from matplotlib.lines import Line2D
+import numpy as np
 
 ## Torch imports
 import torch
@@ -24,7 +26,7 @@ from networks.classificationNetworks import CNNClassifierNetwork
 from networks.samplerNetworks import CNNSamplerNetwork
 from data_related_content.data_stuff import MaskedDataset
 
-wandb.init(project="Restrictive_Sampling_Rewrite")
+# wandb.init(project="Restrictive_Sampling_Rewrite")
 
 
 class TrainingHarness:
@@ -52,8 +54,42 @@ class TrainingHarness:
             self.sampler_optimizer,
             0.1,
             epochs=training_params["epochs"],
-            steps_per_epoch=len(self.train_dl),
+            steps_per_epoch=len(self.train_dl) * self.loops,
             three_phase=True,
+        )
+
+    def plot_grad_flow(self, named_parameters):
+        """Plots the gradients flowing through different layers in the net during training.
+        Can be used for checking for possible gradient vanishing / exploding problems.
+
+        Usage: Plug this function in Trainer class after loss.backwards() as
+        "plot_grad_flow(self.model.named_parameters())" to visualize the gradient flow"""
+
+        ave_grads = []
+        max_grads = []
+        layers = []
+        for n, p in named_parameters:
+            if (p.requires_grad) and ("bias" not in n):
+                layers.append(n)
+                ave_grads.append(p.grad.abs().mean())
+                max_grads.append(p.grad.abs().max())
+        plt.bar(np.arange(len(max_grads)), max_grads, alpha=0.1, lw=1, color="c")
+        plt.bar(np.arange(len(max_grads)), ave_grads, alpha=0.1, lw=1, color="b")
+        plt.hlines(0, 0, len(ave_grads) + 1, lw=2, color="k")
+        plt.xticks(range(0, len(ave_grads), 1), layers, rotation="vertical")
+        plt.xlim(left=0, right=len(ave_grads))
+        plt.ylim(bottom=-0.001, top=0.02)  # zoom in on the lower gradient regions
+        plt.xlabel("Layers")
+        plt.ylabel("average gradient")
+        plt.title("Gradient flow")
+        plt.grid(True)
+        plt.legend(
+            [
+                Line2D([0], [0], color="c", lw=4),
+                Line2D([0], [0], color="b", lw=4),
+                Line2D([0], [0], color="k", lw=4),
+            ],
+            ["max-gradient", "mean-gradient", "zero-gradient"],
         )
 
     def save_mask_and_image(self, im_tensor, mask_tensor, loop_no, show=False):
@@ -83,32 +119,30 @@ class TrainingHarness:
         plt.legend(["Original Image", "Masked Image"])
         plt.imsave(f"{loop_no}_ims.png", grid_image)
 
-    def loopdeedoodle(self, x):
+    def forward_only_classifier(self, x):
+        x = self.classifier(x)
+        return x
+
+    def forward_only_sampler(self, x):
         sampler_mask = self.sampler(x)
         return sampler_mask
 
-    def forward_with_sampler(self, x, og_mask=None):
-        im_before_loop = x.clone()
-        mask_before_loop = og_mask
-        self.save_mask_and_image(
-            im_tensor=im_before_loop, mask_tensor=mask_before_loop, loop_no="init"
-        )
-        # mask is what ya boi got from the dl (x, og_mask)
-        for loopy_no in range(self.loops):
-            # prev_mask = torch.zeros(8, 3, 32, 32)
-            mask = self.loopdeedoodle(x)
-            x = torch.mul(x, mask)
+    def forward_with_sampler(self, x, labels, og_mask):
+        sampler_mask = og_mask.unsqueeze(1)
+        total_loss = 0.0
+        for loop in range(self.loops):
+            input_x = x * sampler_mask
 
-            # diff = prev_mask - mask
-            # print(torch.norm(diff, p=1))
-            # prev_mask = mask.clone()
-            self.save_mask_and_image(im_tensor=x, mask_tensor=mask, loop_no=loopy_no)
-        return x
+            sampler_mask = self.forward_only_sampler(input_x)
+            sampler_pred = sampler_mask * x
 
-    def forward_with_classifier(self, x):
-        x = self.forward_with_sampler(x)
-        x = self.classifier(x)
-        return x
+            out = self.forward_only_classifier(sampler_pred)
+            loss = self.criterion(out, labels)
+            total_loss += loss
+
+        return total_loss / self.loops, sampler_mask, out
+
+        # return sampler_mask
 
     def train_only_classifier(self):
         self.classifier.train()
@@ -116,71 +150,68 @@ class TrainingHarness:
         train_correct = 0
         total = 0
         for data in tqdm.tqdm(self.train_dl):
-            ims, labels, mask = data
-            ims, labels, mask = (
+            ims, labels, masks = data
+            ims, labels, masks = (
                 ims.to(self.device),
                 labels.to(self.device),
-                mask.to(self.device),
+                masks.to(self.device),
             )
-
             self.classifier_optimizer.zero_grad()
-            classifier_out = self.forward_with_classifier(ims)
+            classifier_out = self.forward_only_classifier(ims * masks.unsqueeze(1))
             loss = self.criterion(classifier_out, labels)
 
             loss.backward()
+            self.plot_grad_flow(self.classifier.named_parameters())
 
             self.classifier_optimizer.step()
+            self.classifier_scheduler.step()
             train_loss += loss.item()
             _, pred = torch.max(classifier_out, 1)
             train_correct += pred.eq(labels).sum().item()
             total += labels.size(0)
-
+        plt.show()
         train_loss /= len(self.train_dl)
         train_acc = (train_correct / total) * 100
 
         return train_loss, train_acc
 
-    def train_both(self):
-        self.classifier.train()
-        self.sampler.train()
+    def train_only_sampler(self):
+        self.classifier.eval()
         train_loss = 0.0
         train_correct = 0
         total = 0
         for data in tqdm.tqdm(self.train_dl):
-            ims, labels, mask = data
-            ims, labels, mask = (
+            ims, labels, masks = data
+            ims, labels, masks = (
                 ims.to(self.device),
                 labels.to(self.device),
-                mask.to(self.device),
+                masks.to(self.device),
             )
 
-            self.classifier_optimizer.zero_grad()
             self.sampler_optimizer.zero_grad()
-            ## Input image mit random mask -> Sampler -> x_sampled (looped N times)
-            sampler_out = self.forward_with_sampler(ims, og_mask=mask)
+            sampler_loss, sampler_mask, classifier_out = self.forward_with_sampler(
+                ims, labels, masks
+            )
+            sampler_loss.backward()
+            self.plot_grad_flow(self.sampler.named_parameters())
 
-            ## x_sampled -> classifier -> predictions
-            classifier_out = self.forward_with_classifier(sampler_out)
-            loss = self.criterion(classifier_out, labels)
-
-            loss.backward()
-
-            self.classifier_optimizer.step()
             self.sampler_optimizer.step()
-            train_loss += loss.item()
+            self.sampler_scheduler.step()
+            train_loss += sampler_loss.item()
             _, pred = torch.max(classifier_out, 1)
             train_correct += pred.eq(labels).sum().item()
             total += labels.size(0)
+        plt.show()
 
         train_loss /= len(self.train_dl)
         train_acc = (train_correct / total) * 100
 
         return train_loss, train_acc
 
-    def test_model(self, both=False):
-        if both:
+    def test_model(self, with_sampler=False):
+        if with_sampler:
             self.sampler.eval()
-            self.classifier.eval()
+        self.classifier.eval()
         test_loss = 0.0
         test_correct = 0
         test_total = 0
@@ -192,11 +223,16 @@ class TrainingHarness:
                     labels.to(self.device),
                     masks.to(self.device),
                 )
-                if both:
-                    sampler_out = self.forward_with_sampler(ims, og_mask=masks)
-                    classifier_out = self.forward_with_classifier(sampler_out)
+                if with_sampler:
+                    (
+                        loss,
+                        sampler_mask,
+                        classifier_out,
+                    ) = self.forward_with_sampler(ims, labels, masks)
                 else:
-                    classifier_out = self.forward_with_classifier(ims)
+                    classifier_out = self.forward_with_classifier(
+                        ims * masks.unsqueeze(1)
+                    )
 
                 loss = self.criterion(classifier_out, labels)
                 _, pred = torch.max(classifier_out, 1)
@@ -230,7 +266,7 @@ test_transform = transforms.Compose(
 def train_experiment(sparsity_mask):
 
     train_params = {}
-    train_params["epochs"] = 50
+    train_params["epochs"] = 2
     train_params["batch_size"] = 256
     train_params["is_deterministic"] = False
     train_params["classifier"] = CNNClassifierNetwork()
@@ -256,13 +292,13 @@ def train_experiment(sparsity_mask):
         train_ds,
         train_params["mask_sparsity"],
         transforms=train_transform,
-        im_size=(3, 32, 32),
+        im_size=(32, 32),
     )
     test_dataset = MaskedDataset(
         test_ds,
         train_params["mask_sparsity"],
         transforms=test_transform,
-        im_size=(3, 32, 32),
+        im_size=(32, 32),
     )
 
     train_dl = DataLoader(
@@ -294,13 +330,26 @@ def train_experiment(sparsity_mask):
             training_run.sampler.state_dict(),
             f"./{ckpt_path}/samplermodel_{epoch}.pt",
         )
-        if epoch < 10:
+        if epoch > 10:
             train_loss, train_acc = training_run.train_only_classifier()
-            test_loss, test_acc = training_run.test_model(both=False)
+            test_loss, test_acc = training_run.test_model(with_sampler=False)
         else:
             print("Now training both Sampler and Classifier!")
-            train_loss, train_acc = training_run.train_both()
-            test_loss, test_acc = training_run.test_model(both=True)
+            for param in training_run.classifier.parameters():
+                param.requires_grad = False
+            classifier_params = sum(
+                p.numel()
+                for p in training_run.classifier.parameters()
+                if p.requires_grad
+            )
+            sampler_params = sum(
+                p.numel() for p in training_run.sampler.parameters() if p.requires_grad
+            )
+            print(
+                f"Trainable Classifier Params: {classifier_params}, Trainable Sampler Params: {sampler_params}"
+            )
+            train_loss, train_acc = training_run.train_only_sampler()
+            test_loss, test_acc = training_run.test_model(with_sampler=True)
         print(
             f"Train Loss: {train_loss}, Train Acc: {train_acc}, Test Loss: {test_loss}, Test Acc: {test_acc}"
         )

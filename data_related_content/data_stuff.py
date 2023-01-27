@@ -41,7 +41,7 @@ class MaskedDataset(Dataset):
 
         if self.mask_mode:
             mask = self.mask_type()
-            im = im * mask
+            # im = im * mask
             return im, labels, mask
 
         return im, labels

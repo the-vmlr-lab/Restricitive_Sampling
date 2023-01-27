@@ -36,7 +36,7 @@ class CNNSamplerNetwork(nn.Module):
         self.deconv_block2 = nn.Sequential(
             nn.ConvTranspose2d(
                 in_channels=32,
-                out_channels=3,
+                out_channels=1,
                 kernel_size=3,
                 stride=2,
                 padding=1,

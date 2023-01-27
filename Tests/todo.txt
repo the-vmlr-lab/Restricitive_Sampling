@@ -1,0 +1,15 @@
+1. Dataset Object
+- Convert to 2D mask (apply via broadcasting) - done
+- Return full image and mask separately - done
+
+2. Classifier
+- 
+
+3. Sampler
+- 
+
+4. Training Harness
+- Forward with only classifer, no sampler - done
+- Image * init_mask -> Sampler -> Sampler_pred_mask * Image -> Sampler -> Sampler_pred_mask, separate update
+- Plotting function is not saving
+- 
