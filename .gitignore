@@ -3,6 +3,5 @@ data/
 __pycache__/
 *.png
 *.jpg
-state_dicts/
 *_checkpoints/
-
+*.pt
