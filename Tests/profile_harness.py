@@ -56,6 +56,7 @@ class TrainingHarness:
             steps_per_epoch=len(self.train_dl) * self.loops,
             three_phase=True,
         )
+        self.epochs = 0
 
     def plot_grad_flow(self, named_parameters):
         """Plots the gradients flowing through different layers in the net during training.
@@ -90,7 +91,7 @@ class TrainingHarness:
             ],
             ["max-gradient", "mean-gradient", "zero-gradient"],
         )
-        plt.savefig("img_grad.png")
+        plt.savefig(f"grad_{self.epochs}.png")
 
     def save_mask_and_image(self, im_tensor, mask_tensor, loop_no, show=False):
         mean = (0.4914, 0.4822, 0.4465)
@@ -145,6 +146,7 @@ class TrainingHarness:
         # return sampler_mask
 
     def train_only_classifier(self):
+        self.epochs += 1
         self.classifier.train()
         train_loss = 0.0
         train_correct = 0
@@ -161,7 +163,7 @@ class TrainingHarness:
             loss = self.criterion(classifier_out, labels)
 
             loss.backward()
-            self.plot_grad_flow(self.classifier.named_parameters())
+            # self.plot_grad_flow(self.classifier.named_parameters())
 
             self.classifier_optimizer.step()
             self.classifier_scheduler.step()
@@ -176,8 +178,8 @@ class TrainingHarness:
         return train_loss, train_acc
 
     def train_only_sampler(self):
+        self.epochs += 1
         self.classifier.eval()
-        self.sampler.train()
         train_loss = 0.0
         train_correct = 0
         total = 0
@@ -194,7 +196,7 @@ class TrainingHarness:
                 ims, labels, masks
             )
             sampler_loss.backward()
-            self.plot_grad_flow(self.sampler.named_parameters())
+            # self.plot_grad_flow(self.sampler.named_parameters())
 
             self.sampler_optimizer.step()
             self.sampler_scheduler.step()
@@ -230,7 +232,7 @@ class TrainingHarness:
                         classifier_out,
                     ) = self.forward_with_sampler(ims, labels, masks)
                 else:
-                    classifier_out = self.forward_with_classifier(
+                    classifier_out = self.forward_only_classifier(
                         ims * masks.unsqueeze(1)
                     )
 
@@ -266,7 +268,7 @@ test_transform = transforms.Compose(
 def train_experiment(sparsity_mask):
 
     train_params = {}
-    train_params["epochs"] = 2
+    train_params["epochs"] = 50
     train_params["batch_size"] = 256
     train_params["is_deterministic"] = False
     train_params["classifier"] = CNNClassifierNetwork()
@@ -322,17 +324,24 @@ def train_experiment(sparsity_mask):
 
     for epoch in range(train_params["epochs"]):
         print(f"Epoch: {epoch}")
-        torch.save(
-            training_run.classifier.state_dict(),
-            f"./{ckpt_path}/classifiermodel_{epoch}.pt",
-        )
-        torch.save(
-            training_run.sampler.state_dict(),
-            f"./{ckpt_path}/samplermodel_{epoch}.pt",
-        )
-        if epoch > 10:
+
+        if epoch < 10:
+            prof = torch.profiler.profile(
+                schedule=torch.profiler.schedule(wait=1, warmup=1, active=3, repeat=2),
+                on_trace_ready=torch.profiler.tensorboard_trace_handler(
+                    "./log/resnet18"
+                ),
+                record_shapes=True,
+                with_stack=True,
+            )
+            prof.start()
             train_loss, train_acc = training_run.train_only_classifier()
             test_loss, test_acc = training_run.test_model(with_sampler=False)
+            prof.stop()
+
+            print(
+                f"Train Loss: {train_loss}, Train Acc: {train_acc}, Test Loss: {test_loss}, Test Acc: {test_acc}"
+            )
         else:
             print("Now training both Sampler and Classifier!")
             for param in training_run.classifier.parameters():
@@ -353,16 +362,6 @@ def train_experiment(sparsity_mask):
         print(
             f"Train Loss: {train_loss}, Train Acc: {train_acc}, Test Loss: {test_loss}, Test Acc: {test_acc}"
         )
-        """wandb.log(
-            {
-                "training_loss": train_loss,
-                "training_accuracy": train_acc,
-                "test_loss": test_loss,
-                "test_accuracy": test_acc,
-                # "lr": training_run.scheduler.get_last_lr()[0],
-                "epoch": epoch,
-            }
-        )"""
 
 
 if __name__ == "__main__":
