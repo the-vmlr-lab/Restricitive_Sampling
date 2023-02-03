@@ -5,3 +5,6 @@ __pycache__/
 *.jpg
 *_checkpoints/
 *.pt
+*.zip
+*.csv
+*.parquet
