@@ -9,7 +9,6 @@ from resnet18_cifar10 import *
 import tqdm
 import matplotlib.pyplot as plt
 
-
 training_params = {}
 training_params["num_epochs"] = 2
 device = torch.device("cpu")
@@ -36,7 +35,7 @@ model = AE(512).to(device)
 model = torch.compile(model, mode="reduce-overhead")
 
 app = resnet18(pretrained=True)
-optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=5e-4)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 for epoch in tqdm.tqdm(range(400), desc="epochs"):
     for data in tqdm.tqdm(dl, leave=False, desc="batches"):
@@ -53,14 +52,14 @@ for epoch in tqdm.tqdm(range(400), desc="epochs"):
 
         im_loss, mat_loss, total_loss = model.ae_loss(
             recon_image=img_rec,
-            input_image=gt_im,
+            gt_image=gt_im,
             mat=mat_rec,
             input_mat=matrix_indices,
         )
         total_loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 0.01)
+        #torch.nn.utils.clip_grad_norm_(model.parameters(), 0.01)
         optimizer.step()
-    if epoch % 10 == 0:
+    if epoch % 2 == 0:
         plot_image_grid(
             [
                 inp_im[5].permute(1, 2, 0).detach().cpu().numpy(),
