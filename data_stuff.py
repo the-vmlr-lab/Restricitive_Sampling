@@ -30,3 +30,29 @@ class VAEDataset(Dataset):
             gt_mask[i[0], i[1]] = 1
 
         return im, inp_im * gt_mask, labels, mask_indices[0:500, :]
+
+
+class AEDataset(Dataset):
+    def __init__(self, dataset, transforms, im_size, mask_sparsity):
+        self.transforms = transforms
+        self.dataset = dataset
+        self.im_size = im_size
+        self.mask_sparsity = mask_sparsity
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, idx):
+        im, labels = self.dataset[idx]
+        inp_im = self.transforms(im)
+        gt_mask = torch.zeros((32, 32), dtype=torch.int)
+        fixed_length = int(32 * 32 * 0.5)
+        indices = torch.randperm(32 * 32, dtype=torch.long)[:fixed_length]
+        gt_mask.view(-1)[indices] = 1
+        mask_indices = torch.argwhere(gt_mask)
+
+        mask_indices = mask_indices.float()
+        mask_indices /= 32
+        gt_im = torch.mul(inp_im, gt_mask)
+
+        return inp_im, labels, gt_im, mask_indices

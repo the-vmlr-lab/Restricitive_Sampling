@@ -4,10 +4,10 @@ import torch.nn.functional as F
 
 
 class Encoder(nn.Module):
-    def __init__(self, K):
+    def __init__(self):
         super(Encoder, self).__init__()
+
         ## Image -> Encoder
-        self.K = K
 
         self.conv_block1 = nn.Sequential(
             nn.Conv2d(3, 32, kernel_size=3, stride=2, padding=1),  # stride=1
@@ -39,10 +39,12 @@ class Encoder(nn.Module):
 
         ## Matrix -> Encoder
 
-        self.linear1 = nn.Linear(self.K * 2, 512)
+        self.linear1 = nn.Linear(500 * 2, 512)
         self.linear2 = nn.Linear(512, 256)
 
         ## mu an var
+        self.linear_mu = nn.Linear(512, 128)
+        self.linear_logvar = nn.Linear(512, 128)
 
     def forward(self, x, y):
 
@@ -64,15 +66,18 @@ class Encoder(nn.Module):
         ## Combine
         z = torch.cat([x, y], axis=1)
 
-        return z
+        mu = self.linear_mu(z)
+        logvar = self.linear_logvar(z)
+
+        return mu, logvar
 
 
 class Decoder(nn.Module):
-    def __init__(self, K):
+    def __init__(self):
         super(Decoder, self).__init__()
 
-        self.K = K
         ## decoder image
+        self.in_layer = nn.Linear(128, 512)
         self.transpose_block1 = nn.Sequential(
             nn.ConvTranspose2d(
                 512, 256, kernel_size=3, stride=2, padding=1, output_padding=1
@@ -111,12 +116,12 @@ class Decoder(nn.Module):
             nn.Tanh(),
         )
         ## decode matrix
-        self.dec_linear1 = nn.Linear(512, 512)
-        self.dec_linear2 = nn.Linear(512, self.K * 2)
+        self.dec_linear1 = nn.Linear(128, 512)
+        self.dec_linear2 = nn.Linear(512, 1000)
 
     def forward(self, z):
-        # x = self.in_layer(z)
-        x = z.reshape(-1, 512, 1, 1)
+        x = self.in_layer(z)
+        x = x.reshape(-1, 512, 1, 1)
         x = self.transpose_block1(x)
         x = self.transpose_block2(x)
         x = self.transpose_block3(x)
@@ -129,23 +134,34 @@ class Decoder(nn.Module):
         return im, mat
 
 
-class AE(nn.Module):
-    def __init__(self, K):
-        super(AE, self).__init__()
-        self.K = K
-        self.encoder = Encoder(self.K)
-        self.decoder = Decoder(self.K)
+class VAE(nn.Module):
+    def __init__(self):
+        super(VAE, self).__init__()
 
-    def ae_loss(self, recon_image, input_image, mat, input_mat):
+        self.encoder = Encoder()
+        self.decoder = Decoder()
+
+    def reparameterize(self, mu, logvar):
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
+
+        return eps * std + mu
+
+    def vae_loss(self, recon_image, input_image, mu, logvar, mat, input_mat):
         im_recon_loss = F.mse_loss(recon_image, input_image)
-        mat_recon_loss = F.mse_loss(mat.view(-1, self.K, 2), input_mat)
+        mat_recon_loss = F.mse_loss(mat.view(-1, 500, 2), input_mat)
 
-        total_loss = im_recon_loss + mat_recon_loss
+        kld_loss = torch.mean(
+            -0.5 * torch.sum(1 + logvar - mu**2 - logvar.exp(), dim=1), dim=0
+        )
 
-        return im_recon_loss, mat_recon_loss, total_loss
+        total_loss = 0.998 * im_recon_loss + 0.001 * mat_recon_loss + 0.00025 * kld_loss
+
+        return im_recon_loss, mat_recon_loss, kld_loss, total_loss
 
     def forward(self, input_image, input_matrix):
-        z = self.encoder(input_image, input_matrix)
+        mu, logvar = self.encoder(input_image, input_matrix)
+        z = self.reparameterize(mu, logvar)
         im, mat = self.decoder(z)
 
-        return im, mat, z
+        return im, mat, z, mu, logvar
