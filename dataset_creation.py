@@ -14,22 +14,6 @@ import tqdm
 device = torch.device("cpu")
 
 
-def plot_image_grid(images, ncols=None, cmap="gray"):
-    """Plot a grid of images"""
-    if not ncols:
-        factors = [i for i in range(1, len(images) + 1) if len(images) % i == 0]
-        ncols = factors[len(factors) // 2] if len(factors) else len(images) // 4 + 1
-    nrows = int(len(images) / ncols) + int(len(images) % ncols)
-    imgs = [images[i] if len(images) > i else None for i in range(nrows * ncols)]
-    f, axes = plt.subplots(nrows, ncols, figsize=(3 * ncols, 2 * nrows))
-    axes = axes.flatten()[: len(imgs)]
-    for img, ax in zip(imgs, axes.flatten()):
-        if np.any(img):
-            # if len(img.shape) > 2 and img.shape[2] == 1:
-            #    img = img.squeeze()
-            ax.imshow(img, cmap=cmap)
-
-
 def generate_mask(img, label, model, retention_percent=0.5):
     target_layers = [model.layer4[-1]]
     cam = GradCAM(model=model, target_layers=target_layers, use_cuda=False)

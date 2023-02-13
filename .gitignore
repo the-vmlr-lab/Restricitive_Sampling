@@ -8,3 +8,5 @@ __pycache__/
 *.zip
 *.csv
 *.parquet
+ckpts/
+elephant_masks.py

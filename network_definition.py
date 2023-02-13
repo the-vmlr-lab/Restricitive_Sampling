@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class Encoder(nn.Module):
     def __init__(self, K):
         super(Encoder, self).__init__()
@@ -17,18 +18,16 @@ class Encoder(nn.Module):
             nn.GELU(),
         )
         self.conv_block3 = nn.Sequential(
-            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1),  # stride=1
-            nn.GELU()
+            nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1), nn.GELU()  # stride=1
         )
         self.conv_block4 = nn.Sequential(
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
-            nn.GELU()
+            nn.Conv2d(64, 64, kernel_size=3, padding=1), nn.GELU()
         )
         self.conv_block5 = nn.Sequential(
             nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1),  # stride=2,
             nn.GELU(),
             nn.Flatten(),
-            nn.Linear(2*16*32, 128)
+            nn.Linear(2 * 16 * 32, 128),
         )
 
         ## Matrix -> Encoder
@@ -53,7 +52,7 @@ class Encoder(nn.Module):
         y = self.linear2(y)
 
         ## Combine
-       # print(x.shape, y.shape)
+        # print(x.shape, y.shape)
         z = torch.cat([x, y], axis=1)
 
         return z
@@ -72,7 +71,7 @@ class Decoder(nn.Module):
             ),
             nn.GELU(),
             nn.Conv2d(64, 64, kernel_size=3, padding=1),
-            nn.GELU()
+            nn.GELU(),
         )
 
         self.transpose_block2 = nn.Sequential(
@@ -81,13 +80,13 @@ class Decoder(nn.Module):
             ),
             nn.GELU(),
             nn.Conv2d(32, 32, kernel_size=3, padding=1),
-            nn.GELU()
+            nn.GELU(),
         )
         self.transpose_block3 = nn.Sequential(
             nn.ConvTranspose2d(
                 32, 3, kernel_size=3, stride=2, padding=1, output_padding=1
             ),
-            nn.Tanh()
+            nn.Tanh(),
         )
 
         self.in_layer = nn.Linear(256, 1024)
@@ -96,7 +95,7 @@ class Decoder(nn.Module):
         self.dec_linear2 = nn.Linear(512, self.K * 2)
 
     def forward(self, z):
-        #print(z.shape)
+        # print(z.shape)
         x = self.in_layer(z)
         x = x.reshape(-1, 64, 4, 4)
         x = self.transpose_block1(x)
@@ -130,3 +129,76 @@ class AE(nn.Module):
         im, mat = self.decoder(z)
 
         return im, mat, z
+
+
+class LinearMaskingModule(nn.Module):
+    def __init__(self, K):
+        super(LinearMaskingModule, self).__init__()
+        self.K = K
+
+        self.linear_in = nn.Sequential(
+            nn.Linear(self.K * 2, 512), nn.BatchNorm1d(512), nn.PReLU()
+        )
+        self.linear_body = nn.Sequential(
+            *[
+                nn.Sequential(
+                    nn.Linear(512, 512),
+                    nn.BatchNorm1d(512),
+                    nn.PReLU(),
+                    # nn.Dropout(0.5),
+                )
+                for i in range(3)
+            ]
+        )
+        self.linear_out = nn.Linear(512, 1024)
+
+    def forward(self, x):
+        x = torch.flatten(x, start_dim=1)
+        x = self.linear_in(x)
+        x = self.linear_body(x)
+        x = torch.sigmoid(self.linear_out(x))
+
+        # mask = torch.sigmoid(x.reshape(-1, 32, 32)0.05)
+        mask = x.reshape(-1, 32, 32)
+        return mask
+
+
+class LinearMaskingModuleCNN(nn.Module):
+    def __init__(self, K):
+        super(LinearMaskingModuleCNN, self).__init__()
+        self.K = K
+
+        self.linear_in = nn.Sequential(
+            nn.Linear(self.K * 2, 3072), nn.BatchNorm1d(3072), nn.LeakyReLU()
+        )
+        self.cnn_in = nn.Sequential(
+            nn.Conv2d(3, 32, kernel_size=3, padding="same"),
+            nn.BatchNorm1d(32),
+            nn.LeakyReLU(),
+        )
+
+        self.cnn_body = nn.Sequential(
+            *[
+                nn.Sequential(
+                    nn.Conv2d(32, 32, kernel_size=3, padding="same"),
+                    nn.BatchNorm2d(32),
+                    nn.LeakyReLU(),
+                    # nn.Dropout(0.5),
+                )
+                for i in range(3)
+            ]
+        )
+        self.cnn_out = nn.Sequential(
+            nn.Conv2d(32, 1, kernel_size=3, padding="same"),
+            nn.Sigmoid(),
+        )
+
+    def forward(self, x):
+        x = torch.flatten(x, start_dim=1)
+        x = self.linear_in(x)
+        x = x.reshape(-1, 3, 32, 32)
+        x = self.cnn_in(x)
+        x = self.cnn_body(x)
+        x = self.cnn_out(x)
+
+        return x

@@ -56,3 +56,22 @@ class AEDataset(Dataset):
         gt_im = torch.mul(inp_im, gt_mask)
 
         return inp_im, labels, gt_im, mask_indices
+
+
+class LinearMaskingDataset(Dataset):
+    def __init__(self, df_path):
+        self.df_path = df_path
+        self.df = pl.read_parquet(self.df_path)
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        gt_mask = np.array([i.astype(np.float64) for i in (self.df[idx, 1]).to_numpy()])
+
+        mask_indices = np.array(
+            [i.astype(np.float64) for i in (self.df[idx, 2]).to_numpy()]
+        )
+        mask_indices /= 32
+
+        return gt_mask.astype(np.float32), mask_indices.astype(np.float32)
